@@ -16,7 +16,7 @@ InoPlanner::InoPlanner()
 
 void InoPlanner::initialize(std::string, costmap_2d::Costmap2DROS* costmap_ros)
 {
-  costmap_ = costmap_ros;
+  costmap_ = costmap_ros->getCostmap();
   initialized_ = true;
 }
 
@@ -26,15 +26,28 @@ bool InoPlanner::makePlan(
   const geometry_msgs::PoseStamped& goal,
   std::vector<geometry_msgs::PoseStamped>& plan)
 {
-  GridPose grid_start;
-  GridPose grid_end;
-  bool succeeded;
+  unsigned int mx, my;
 
-  succeeded = dijkstra(grid_start, grid_end);
+  costmap_->worldToMap(start.pose.position.x, start.pose.position.y, mx, my);
+  GridPose grid_start(GridLocation(static_cast<int>(mx), static_cast<int>(my)), 0, 359);
+
+  costmap_->worldToMap(goal.pose.position.x, goal.pose.position.y, mx, my);
+  GridPose grid_end(GridLocation(static_cast<int>(mx), static_cast<int>(my)), 0, 359);
+
+  bool succeeded = dijkstra(grid_start, grid_end);
 
   if (succeeded)
   {
     reconstructPath(grid_start, grid_end);
+
+    geometry_msgs::PoseStamped step = start;
+    for (GridPose pose: path_)
+    {
+      costmap_->mapToWorld(
+            pose.location().x(), pose.location().y(),
+            step.pose.position.x, step.pose.position.y);
+      plan.push_back(step);
+    }
   }
 
   return succeeded;

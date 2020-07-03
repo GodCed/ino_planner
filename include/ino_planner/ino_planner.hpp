@@ -36,7 +36,7 @@ namespace ino_planner {
 
   private:
     bool initialized_ = false;
-    costmap_2d::Costmap2DROS* costmap_ = nullptr;
+    costmap_2d::Costmap2D* costmap_ = nullptr;
     
     Graph graph_;
     std::unordered_map<GridPose, GridPose> came_from_;

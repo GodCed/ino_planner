@@ -21,6 +21,16 @@ namespace ino_planner
     int hash() const;
     double costTo(GridLocation location);
 
+    inline unsigned int x()
+    {
+      return static_cast<unsigned int>(x_);
+    }
+
+    inline unsigned int y()
+    {
+      return static_cast<unsigned int>(y_);
+    }
+
     friend inline GridLocation operator+(const GridLocation& a, const GridLocation& b)
     {
       return GridLocation(a.x_ + b.x_, a.y_ + b.y_);
@@ -49,6 +59,11 @@ namespace ino_planner
     inline GridLocation offsetLocation(GridLocation offset)
     {
       return location_ + offset;
+    }
+
+    inline GridLocation location()
+    {
+      return location_;
     }
 
     friend inline bool operator==(const GridPose& a, const GridPose& b)
