@@ -1,0 +1,7 @@
+<library path="lib/libino_planner">
+  <class name="ino_planner/InoPlanner" type="ino_planner::InoPlanner" base_class_type="nav_core::BaseGlobalPlanner">
+    <description>
+
+    </description>
+  </class>
+</library>
