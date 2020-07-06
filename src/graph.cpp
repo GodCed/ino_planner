@@ -73,15 +73,72 @@ std::vector<GridPose> Graph::neighbors(GridPose pose)
     for(auto move: moves_)
     {
         GridLocation location = pose.offsetLocation(move);
-        auto potential_poses = free_grid_.equal_range(location);
-        std::for_each(
-            potential_poses.first,
-            potential_poses.second,
-            [pose, neighbors](auto potential_pair) mutable{
-            if (pose.canReachTo(potential_pair.second)) {
-                neighbors.push_back(potential_pair.second);
-            }
-        });
+        if (location.x() > 0 && location.x() < size_x_ && location.y() > 0 && location.y() < size_y_)
+        {
+          auto potential_poses = free_grid_.equal_range(location);
+          std::for_each(
+              potential_poses.first,
+              potential_poses.second,
+              [pose, neighbors](auto potential_pair) mutable{
+              if (pose.canReachTo(potential_pair.second)) {
+                  neighbors.push_back(potential_pair.second);
+              }
+          });
+        }
     }
     return neighbors;
 }
+
+
+void Graph::rebuild(costmap_2d::Costmap2D *costmap, base_local_planner::WorldModel &world_model, std::vector<geometry_msgs::Point> &footprint)
+{
+  free_grid_.clear();
+
+  size_x_ = costmap->getSizeInCellsX();
+  size_y_ = costmap->getSizeInCellsY();
+
+  for (unsigned int mx = 0; mx < size_x_; mx++)
+  {
+    for (unsigned int my = 0; my < size_y_; my++)
+    {
+      double cost = costmap->getCost(mx, my);
+      if (cost < 128) // Definitly not in a collision
+      {
+        GridLocation loc(static_cast<int>(mx), static_cast<int>(my));
+        GridPose pose(loc, 0, 359);
+        free_grid_.emplace(loc, pose);
+      }
+      else if (cost < 253) // Maybe in a collision
+      {
+        GridLocation loc(static_cast<int>(mx), static_cast<int>(my));
+        int safe_begin = 0;
+        bool was_safe = false;
+        for (int theta = 0; theta < 359; theta+=10) // We check orientations...
+        {
+          double wx, wy;
+          costmap->mapToWorld(mx, my, wx, wy);
+          bool colliding = world_model.footprintCost(wx, wy, theta, footprint) < 0;
+
+          if (!colliding && !was_safe) // Begining of safe zone
+          {
+            safe_begin = theta;
+            was_safe = true;
+          }
+          else if (colliding && was_safe) // End of safe zone
+          {
+            GridPose pose(loc, safe_begin, theta-safe_begin-1);
+            free_grid_.emplace(loc, pose);
+            was_safe = false;
+          }
+        }
+        if (was_safe) // Last interval was open
+        {
+          GridPose pose(loc, safe_begin, 359-safe_begin);
+          free_grid_.emplace(loc, pose);
+        }
+      }
+      // We ignore 253-254 because we are definitly in a collision.
+    }
+  }
+}
+

@@ -3,6 +3,7 @@
 
 
 #include <nav_core/base_global_planner.h>
+#include <base_local_planner/costmap_model.h>
 #include <ino_planner/graph.hpp>
 #include <queue>
 #include <vector>
@@ -36,8 +37,11 @@ namespace ino_planner {
 
   private:
     bool initialized_ = false;
+
+    std::vector<geometry_msgs::Point> footprint_;
     costmap_2d::Costmap2D* costmap_ = nullptr;
-    
+    std::unique_ptr<base_local_planner::CostmapModel> worldModel_;
+
     Graph graph_;
     std::unordered_map<GridPose, GridPose> came_from_;
     std::unordered_map<GridPose, double> cost_so_far_;

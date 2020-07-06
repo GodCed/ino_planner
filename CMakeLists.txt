@@ -10,6 +10,8 @@ add_compile_options(-std=c++14)
 find_package(catkin REQUIRED
   costmap_2d
   nav_core
+  base_local_planner
+  tf2
   pluginlib
   roscpp
 )
@@ -109,6 +111,8 @@ catkin_package(
   CATKIN_DEPENDS
     costmap_2d
     nav_core
+    base_local_planner
+    tf2
     pluginlib
     roscpp
 )

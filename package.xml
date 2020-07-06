@@ -51,6 +51,8 @@
   <buildtool_depend>catkin</buildtool_depend>
   <depend>costmap_2d</depend>
   <depend>nav_core</depend>
+  <depend>base_local_planner</depend>
+  <depend>tf2</depend>
   <depend>pluginlib</depend>
   <depend>roscpp</depend>
 

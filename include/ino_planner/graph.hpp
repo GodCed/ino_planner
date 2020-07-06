@@ -6,6 +6,8 @@
 #include <vector>
 #include <array>
 #include <unordered_map>
+#include <costmap_2d/costmap_2d.h>
+#include <base_local_planner/world_model.h>
 
 
 namespace ino_planner
@@ -66,6 +68,9 @@ namespace ino_planner
       return location_;
     }
 
+    inline int theta_start() { return free_theta_start_; }
+    inline int theta_length() { return free_theta_length_; }
+
     friend inline bool operator==(const GridPose& a, const GridPose& b)
     {
       return a.location_ == b.location_ && a.canReachTo(b);
@@ -121,6 +126,7 @@ namespace ino_planner
   {
   public:
     std::vector<GridPose> neighbors(GridPose pose);
+    void rebuild(costmap_2d::Costmap2D *costmap, base_local_planner::WorldModel &world_model, std::vector<geometry_msgs::Point> &footprint);
 
   private:
     std::unordered_multimap<GridLocation, GridPose> free_grid_;
@@ -129,6 +135,9 @@ namespace ino_planner
       GridLocation{1, 0}, GridLocation{0, 1},
       GridLocation{-1, 0}, GridLocation{0, -1}
     };
+
+    unsigned int size_x_;
+    unsigned int size_y_;
   };
 
 
