@@ -70,13 +70,13 @@ bool InoPlanner::makePlan(
   GridPose grid_end(GridLocation(static_cast<int>(mx), static_cast<int>(my)), 0, 359);
 
   ROS_INFO("Building the graph...");
-  ROS_DEBUG("Building the graph...");
   graph_.rebuild(costmap_, *worldModel_, footprint_);
   ROS_INFO("Graph built. Planning path.");
   bool succeeded = dijkstra(grid_start, grid_end);
 
   if (succeeded)
   {
+    ROS_INFO("Found path.");
     reconstructPath(grid_start, grid_end);
 
     geometry_msgs::PoseStamped step = start;
@@ -95,6 +95,11 @@ bool InoPlanner::makePlan(
 
       plan.push_back(step);
     }
+  }
+
+  else
+  {
+    ROS_WARN("No path to goal found.");
   }
 
   return succeeded;
@@ -117,6 +122,7 @@ bool InoPlanner::dijkstra(GridPose start, GridPose goal)
 
   while (!frontier_.empty())
   {
+    ROS_INFO_THROTTLE(1, "frontier has %lu nodes.", frontier_.size());
     current = frontier_.top().second;
     frontier_.pop();
 
@@ -125,6 +131,7 @@ bool InoPlanner::dijkstra(GridPose start, GridPose goal)
       return true;
     }
 
+    ROS_INFO_THROTTLE(1, "node has %lu neighbors.", graph_.neighbors(current).size());
     for (GridPose next : graph_.neighbors(current))
     {
       new_cost = cost_so_far_[current] + current.costTo(next);

@@ -107,7 +107,7 @@ find_package(catkin REQUIRED
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
   INCLUDE_DIRS include
-  LIBRARIES ${PROJECT_NAME}_lib
+  LIBRARIES ino_planner
   CATKIN_DEPENDS
     costmap_2d
     nav_core
@@ -129,7 +129,7 @@ include_directories(
 )
 
 ## Declare a C++ library
-add_library(ino_planner_lib
+add_library(ino_planner
   src/graph.cpp
   src/ino_planner.cpp
 )
@@ -137,8 +137,9 @@ add_library(ino_planner_lib
 ## Add cmake target dependencies of the library
 ## as an example, code may need to be generated before libraries
 ## either from message generation or dynamic reconfigure
-add_dependencies(ino_planner_lib
-  ${${PROJECT_NAME}_EXPORTED_TARGETS}
+add_dependencies(
+  ino_planner
+  ${ino_planner_EXPORTED_TARGETS}
   ${catkin_EXPORTED_TARGETS}
 )
 
@@ -158,7 +159,7 @@ add_dependencies(ino_planner_lib
 # add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Specify libraries to link a library or executable target against
-target_link_libraries(ino_planner_lib
+target_link_libraries(ino_planner
   ${catkin_LIBRARIES}
 )
 
@@ -184,14 +185,16 @@ target_link_libraries(ino_planner_lib
 
 ## Mark libraries for installation
 ## See http://docs.ros.org/melodic/api/catkin/html/howto/format1/building_libraries.html
-install(TARGETS ino_planner_lib
+install(
+  TARGETS ino_planner
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   RUNTIME DESTINATION ${CATKIN_GLOBAL_BIN_DESTINATION}
 )
 
 ## Mark cpp header files for installation
-install(DIRECTORY include/${PROJECT_NAME}/
+install(
+  DIRECTORY include/ino_planner/
   DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
 )
 

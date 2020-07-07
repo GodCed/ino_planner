@@ -51,7 +51,9 @@ int GridPose::thetaOverlapWith(GridPose pose) const
 
 bool GridPose::canReachTo(GridPose pose) const
 {
-    return thetaOverlapWith(pose) > 0;
+  int overlap = thetaOverlapWith(pose);
+  ROS_INFO_THROTTLE(1, "overlap is %d", overlap);
+  return overlap > 0;
 }
 
 
@@ -79,7 +81,7 @@ std::vector<GridPose> Graph::neighbors(GridPose pose)
           std::for_each(
               potential_poses.first,
               potential_poses.second,
-              [pose, neighbors](auto potential_pair) mutable{
+              [pose, &neighbors](auto potential_pair) mutable{
               if (pose.canReachTo(potential_pair.second)) {
                   neighbors.push_back(potential_pair.second);
               }
@@ -99,6 +101,7 @@ void Graph::rebuild(costmap_2d::Costmap2D *costmap, base_local_planner::WorldMod
 
   for (unsigned int mx = 0; mx < size_x_; mx++)
   {
+    ROS_INFO_THROTTLE(1, "Building graph %04d/%04d... %lu safe poses added.", mx, size_x_, free_grid_.size());
     for (unsigned int my = 0; my < size_y_; my++)
     {
       double cost = costmap->getCost(mx, my);
