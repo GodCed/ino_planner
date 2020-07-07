@@ -71,6 +71,11 @@ namespace ino_planner
     inline int theta_start() { return free_theta_start_; }
     inline int theta_length() { return free_theta_length_; }
 
+    inline bool theta_is_free(int theta)
+    {
+      return free_theta_start_ <= theta <= free_theta_start_ + free_theta_length_;
+    }
+
     friend inline bool operator==(const GridPose& a, const GridPose& b)
     {
       return a.location_ == b.location_ && a.canReachTo(b);

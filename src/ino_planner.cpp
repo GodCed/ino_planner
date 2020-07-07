@@ -83,20 +83,57 @@ bool InoPlanner::makePlan(
     ROS_INFO("Found path.");
     reconstructPath(grid_start, grid_end);
 
-    geometry_msgs::PoseStamped step = start;
     plan.push_back(start);
-    for (GridPose pose: path_)
+
+    geometry_msgs::PoseStamped step;
+    step.header = start.header;
+
+    for (unsigned long i = 0; i < path_.size(); i++)
     {
+      GridPose pose = path_[i];
+      ROS_INFO("Adding yaw to %04lu/%04lu", i, path_.size());
+
       costmap_->mapToWorld(
             pose.location().x(), pose.location().y(),
             step.pose.position.x, step.pose.position.y);
 
-      double yaw_deg = pose.theta_start() + pose.theta_length()/2.0;
-      double yaw = yaw_deg * M_PI / 180.0;
+      if ( i+20 < path_.size())
+      {
+        GridPose ahead = path_[i+20];
+        double wx, wy;
 
-      tf2::Quaternion orientation;
-      orientation.setRPY(0.0, 0.0, yaw);
-      tf2::convert(orientation, step.pose.orientation);
+        costmap_->mapToWorld(
+              ahead.location().x(), ahead.location().y(),
+              wx, wy);
+
+        double tangent_rad = atan2(
+              wy - step.pose.position.y,
+              wx - step.pose.position.x);
+        int tangent_deg = static_cast<int>(tangent_rad * 180.0 / M_PI);
+
+        double interval_deg = pose.theta_start() + static_cast<double>(pose.theta_length())/2.0;
+        double interval_rad = interval_deg * M_PI / 180.0;
+
+        tf2::Quaternion orientation;
+        if (pose.theta_is_free(tangent_deg))
+        {
+          orientation.setRPY(0.0, 0.0, tangent_rad);
+        }
+        else if (pose.theta_is_free((tangent_deg + 180) % 360))
+        {
+          orientation.setRPY(0.0, 0.0, fmod(tangent_rad + M_PI, M_2_PI));
+        }
+        else
+        {
+          orientation.setRPY(0.0, 0.0, interval_rad);
+        }
+        tf2::convert(orientation, step.pose.orientation);
+      }
+
+      else
+      {
+        step.pose.orientation = goal.pose.orientation;
+      }
 
       plan.push_back(step);
     }
@@ -133,7 +170,6 @@ bool InoPlanner::dijkstra(GridPose start, GridPose goal)
 
   while (!frontier_.empty() && ros::ok())
   {
-    ROS_INFO_THROTTLE(1, "frontier has %lu nodes.", frontier_.size());
     current = frontier_.top().second;
     frontier_.pop();
 
@@ -142,7 +178,6 @@ bool InoPlanner::dijkstra(GridPose start, GridPose goal)
       return true;
     }
 
-    ROS_INFO_THROTTLE(1, "node has %lu neighbors.", graph_.neighbors(current).size());
     for (GridPose next : graph_.neighbors(current))
     {
       new_cost = cost_so_far_[current] + current.costTo(next);
@@ -166,11 +201,13 @@ void InoPlanner::reconstructPath(GridPose start, GridPose goal)
   GridPose current = goal;
   while (current != start)
   {
-    path_.push_back(current);
+    if (current != goal)
+    {
+      path_.push_back(current);
+    }
     current = came_from_[current];
   }
 
-  path_.push_back(start);
   std::reverse(path_.begin(), path_.end());
 }
 
