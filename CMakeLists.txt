@@ -14,6 +14,7 @@ find_package(catkin REQUIRED
   tf2
   pluginlib
   roscpp
+  nav_msgs
 )
 
 ## System dependencies are found with CMake's conventions
@@ -115,6 +116,7 @@ catkin_package(
     tf2
     pluginlib
     roscpp
+    nav_msgs
 )
 
 ###########

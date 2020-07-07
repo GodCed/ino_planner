@@ -30,10 +30,11 @@ double GridLocation::costTo(GridLocation location)
 GridPose::GridPose() {}
 
 
-GridPose::GridPose(GridLocation location, int free_theta_start, int free_theta_length):
+GridPose::GridPose(GridLocation location, int free_theta_start, int free_theta_length, int cost):
     location_(location),
     free_theta_start_(free_theta_start),
-    free_theta_length_(free_theta_length) {}
+    free_theta_length_(free_theta_length),
+    cost_(cost) {}
 
 
 int GridPose::thetaOverlapWith(GridPose pose) const
@@ -59,7 +60,9 @@ bool GridPose::canReachTo(GridPose pose) const
 
 double GridPose::costTo(GridPose pose)
 {
-    return location_.costTo(pose.location_) + (35.9 / (double)thetaOverlapWith(pose));
+    return location_.costTo(pose.location_)
+        + (35.9 / (double)thetaOverlapWith(pose))
+        + cost_;
 }
 
 
@@ -108,7 +111,7 @@ void Graph::rebuild(costmap_2d::Costmap2D *costmap, base_local_planner::WorldMod
       if (cost < 128) // Definitly not in a collision
       {
         GridLocation loc(static_cast<int>(mx), static_cast<int>(my));
-        GridPose pose(loc, 0, 359);
+        GridPose pose(loc, 0, 359, cost);
         free_grid_.emplace(loc, pose);
       }
       else if (cost < 253) // Maybe in a collision
@@ -129,18 +132,22 @@ void Graph::rebuild(costmap_2d::Costmap2D *costmap, base_local_planner::WorldMod
           }
           else if (colliding && was_safe) // End of safe zone
           {
-            GridPose pose(loc, safe_begin, theta-safe_begin-1);
+            GridPose pose(loc, safe_begin, theta-safe_begin-1, cost);
             free_grid_.emplace(loc, pose);
             was_safe = false;
           }
         }
         if (was_safe) // Last interval was open
         {
-          GridPose pose(loc, safe_begin, 359-safe_begin);
+          GridPose pose(loc, safe_begin, 359-safe_begin, cost);
           free_grid_.emplace(loc, pose);
         }
       }
       // We ignore 253-254 because we are definitly in a collision.
+      if (!ros::ok())
+      {
+        break;
+      }
     }
   }
 }

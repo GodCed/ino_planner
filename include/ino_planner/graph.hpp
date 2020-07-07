@@ -53,7 +53,7 @@ namespace ino_planner
   {
   public:
     GridPose();
-    GridPose(GridLocation location, int free_theta_start, int free_theta_length);
+    GridPose(GridLocation location, int free_theta_start, int free_theta_length, int cost);
 
     bool canReachTo(GridPose pose) const;
     double costTo(GridPose pose);
@@ -87,6 +87,7 @@ namespace ino_planner
     GridLocation location_;
     int free_theta_start_;
     int free_theta_length_;
+    int cost_;
 
     int thetaOverlapWith(GridPose pose) const;
   };

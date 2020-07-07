@@ -47,6 +47,8 @@ namespace ino_planner {
     std::unordered_map<GridPose, double> cost_so_far_;
     std::vector<GridPose> path_;
 
+    ros::Publisher path_pub_;
+
     PQ frontier_;
   };
 
