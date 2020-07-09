@@ -53,7 +53,7 @@ int GridPose::thetaOverlapWith(GridPose pose) const
 bool GridPose::canReachTo(GridPose pose) const
 {
   int overlap = thetaOverlapWith(pose);
-  return overlap > 0;
+  return overlap >= 0;
 }
 
 
@@ -105,8 +105,8 @@ void Graph::rebuild(costmap_2d::Costmap2D *costmap, base_local_planner::WorldMod
   {
     for (unsigned int my = 0; my < size_y_; my++)
     {
-      double cost = costmap->getCost(mx, my);
-      if (cost < 128) // Definitly not in a collision
+      unsigned char cost = costmap->getCost(mx, my);
+      if (cost == 0) // Definitly not in a collision
       {
         GridLocation loc(static_cast<int>(mx), static_cast<int>(my));
         GridPose pose(loc, 0, 359, cost);
@@ -121,7 +121,8 @@ void Graph::rebuild(costmap_2d::Costmap2D *costmap, base_local_planner::WorldMod
         {
           double wx, wy;
           costmap->mapToWorld(mx, my, wx, wy);
-          bool colliding = world_model.footprintCost(wx, wy, theta, footprint) < 0;
+          double theta_rad = static_cast<double>(theta) * M_PI / 180.0;
+          bool colliding = world_model.footprintCost(wx, wy, theta_rad, footprint) < 0;
 
           if (!colliding && !was_safe) // Begining of safe zone
           {
@@ -146,6 +147,10 @@ void Graph::rebuild(costmap_2d::Costmap2D *costmap, base_local_planner::WorldMod
       {
         break;
       }
+    }
+    if (!ros::ok())
+    {
+      break;
     }
   }
 }

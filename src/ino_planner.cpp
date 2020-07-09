@@ -2,6 +2,7 @@
 #include <pluginlib/class_list_macros.hpp>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/convert.h>
+#include <tf/tf.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <nav_msgs/Path.h>
 
@@ -64,14 +65,43 @@ bool InoPlanner::makePlan(
     ROS_WARN("The starting pose is outside of the map. Planning will always fail.");
     return false;
   }
-  GridPose grid_start(GridLocation(static_cast<int>(mx), static_cast<int>(my)), 0, 359, 0);
+
+  tf::Quaternion q(
+    start.pose.orientation.x,
+    start.pose.orientation.y,
+    start.pose.orientation.z,
+    start.pose.orientation.w);
+  tf::Matrix3x3 m(q);
+  double roll, pitch, yaw;
+  m.getRPY(roll, pitch, yaw);
+  int start_yaw = (static_cast<int>(yaw * 180.0 / M_PI) + 360) % 360;
+
+  ROS_INFO("Starting yaw is %d", start_yaw);
+
+  GridPose grid_start(GridLocation(static_cast<int>(mx), static_cast<int>(my)), start_yaw, 9, 0);
+  //GridPose grid_start(GridLocation(static_cast<int>(mx), static_cast<int>(my)), 0, 359, 0);
+  grid_start.is_start_ = true;
 
   if (!costmap_->worldToMap(goal.pose.position.x, goal.pose.position.y, mx, my))
   {
     ROS_WARN("The goal pose is outside of the map. Planning will always fail.");
     return false;
   }
-  GridPose grid_end(GridLocation(static_cast<int>(mx), static_cast<int>(my)), 0, 359, 0);
+
+  q = tf::Quaternion(
+    goal.pose.orientation.x,
+    goal.pose.orientation.y,
+    goal.pose.orientation.z,
+    goal.pose.orientation.w);
+  m = tf::Matrix3x3(q);
+  m.getRPY(roll, pitch, yaw);
+  int goal_yaw = (static_cast<int>(yaw * 180.0 / M_PI) + 360) % 360;
+
+  ROS_INFO("Goal yaw is %d", goal_yaw);
+
+  GridPose grid_end(GridLocation(static_cast<int>(mx), static_cast<int>(my)), goal_yaw, 9, 0);
+  //GridPose grid_end(GridLocation(static_cast<int>(mx), static_cast<int>(my)), 0, 359, 0);
+  grid_end.is_goal_ = true;
 
   ROS_INFO("Building the graph...");
   graph_.rebuild(costmap_, *worldModel_, footprint_);
@@ -81,17 +111,20 @@ bool InoPlanner::makePlan(
   if (succeeded)
   {
     ROS_INFO("Found path.");
-    reconstructPath(grid_start, grid_end);
+    reconstructPath(grid_start);
 
     plan.push_back(start);
 
     geometry_msgs::PoseStamped step;
     step.header = start.header;
 
+    tf2::Quaternion last_quat;
+    tf2::convert(start.pose.orientation, last_quat);
+
     for (unsigned long i = 0; i < path_.size(); i++)
     {
       GridPose pose = path_[i];
-      ROS_INFO("Adding yaw to %04lu/%04lu", i, path_.size());
+      ROS_INFO_THROTTLE(1,"Adding yaw to %04lu/%04lu", i, path_.size());
 
       costmap_->mapToWorld(
             pose.location().x(), pose.location().y(),
@@ -106,28 +139,45 @@ bool InoPlanner::makePlan(
               ahead.location().x(), ahead.location().y(),
               wx, wy);
 
+        tf2::Quaternion tangent_quat;
         double tangent_rad = atan2(
               wy - step.pose.position.y,
               wx - step.pose.position.x);
         int tangent_deg = static_cast<int>(tangent_rad * 180.0 / M_PI);
+        tangent_quat.setRPY(0.0, 0.0, tangent_rad);
 
+        tf2::Quaternion reverse_quat;
+        int reverse_deg = (tangent_deg + 180) % 360;
+        double reverse_rad = fmod(tangent_rad + M_PI, 2.0*M_PI);
+        reverse_quat.setRPY(0.0, 0.0, reverse_rad);
+
+        tf2::Quaternion interval_quat;
         double interval_deg = pose.theta_start() + static_cast<double>(pose.theta_length())/2.0;
         double interval_rad = interval_deg * M_PI / 180.0;
+        interval_quat.setRPY(0.0, 0.0, interval_rad);
 
-        tf2::Quaternion orientation;
-        if (pose.theta_is_free(tangent_deg))
+        if(fabs(last_quat.angleShortestPath(tangent_quat)) <= fabs(last_quat.angleShortestPath(reverse_quat)))
         {
-          orientation.setRPY(0.0, 0.0, tangent_rad);
-        }
-        else if (pose.theta_is_free((tangent_deg + 180) % 360))
-        {
-          orientation.setRPY(0.0, 0.0, fmod(tangent_rad + M_PI, M_2_PI));
+          if (pose.theta_is_free(tangent_deg))
+          {
+            tf2::convert(tangent_quat, step.pose.orientation);
+          }
+          else
+          {
+            tf2::convert(interval_quat, step.pose.orientation);
+          }
         }
         else
         {
-          orientation.setRPY(0.0, 0.0, interval_rad);
+          if (pose.theta_is_free(reverse_deg))
+          {
+            tf2::convert(tangent_quat, step.pose.orientation);
+          }
+          else
+          {
+            tf2::convert(interval_quat, step.pose.orientation);
+          }
         }
-        tf2::convert(orientation, step.pose.orientation);
       }
 
       else
@@ -138,6 +188,25 @@ bool InoPlanner::makePlan(
       plan.push_back(step);
     }
     plan.push_back(goal);
+
+
+    //
+    // ===
+    // We need to offset the yaw for 60 samples!
+    // ===
+    //
+
+    for(unsigned long i = plan.size()-2; i > 0; i--)
+    {
+      if (i > 59)
+      {
+        plan[i].pose.orientation = plan[i-60].pose.orientation;
+      }
+      else
+      {
+        plan[i].pose.orientation = start.pose.orientation;
+      }
+    }
 
     nav_msgs::Path path_msg;
     path_msg.header = start.header;
@@ -175,6 +244,7 @@ bool InoPlanner::dijkstra(GridPose start, GridPose goal)
 
     if (current == goal)
     {
+      path_end_ = current;
       return true;
     }
 
@@ -194,20 +264,23 @@ bool InoPlanner::dijkstra(GridPose start, GridPose goal)
 }
 
 
-void InoPlanner::reconstructPath(GridPose start, GridPose goal)
+void InoPlanner::reconstructPath(GridPose start)
 {
   path_.clear();
 
-  GridPose current = goal;
-  while (current != start)
+  GridPose current = path_end_;
+
+  ROS_INFO("reconstructing...");
+  while (current != start && ros::ok())
   {
-    if (current != goal)
+    if (current != path_end_)
     {
       path_.push_back(current);
     }
     current = came_from_[current];
   }
 
+  ROS_INFO("path complete.");
   std::reverse(path_.begin(), path_.end());
 }
 

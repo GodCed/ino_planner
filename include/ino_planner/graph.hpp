@@ -52,6 +52,8 @@ namespace ino_planner
   class GridPose
   {
   public:
+    bool is_start_ = false;
+    bool is_goal_ = false;
     GridPose();
     GridPose(GridLocation location, int free_theta_start, int free_theta_length, int cost);
 
@@ -73,7 +75,7 @@ namespace ino_planner
 
     inline bool theta_is_free(int theta)
     {
-      return free_theta_start_ <= theta <= free_theta_start_ + free_theta_length_;
+      return (free_theta_start_ <= theta) && (theta <= (free_theta_start_ + free_theta_length_));
     }
 
     friend inline bool operator==(const GridPose& a, const GridPose& b)
@@ -137,9 +139,11 @@ namespace ino_planner
   private:
     std::unordered_multimap<GridLocation, GridPose> free_grid_;
 
-    std::array<GridLocation, 4> moves_ = {
+    std::array<GridLocation, 8> moves_ = {
       GridLocation{1, 0}, GridLocation{0, 1},
-      GridLocation{-1, 0}, GridLocation{0, -1}
+      GridLocation{-1, 0}, GridLocation{0, -1},
+      GridLocation{1, 1}, GridLocation{1, -1},
+      GridLocation{-1, -1}, GridLocation{-1, 1}
     };
 
     unsigned int size_x_;

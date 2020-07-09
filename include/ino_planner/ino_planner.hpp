@@ -33,7 +33,7 @@ namespace ino_planner {
         std::vector<geometry_msgs::PoseStamped>& plan);
 
     bool dijkstra(GridPose start, GridPose goal);
-    void reconstructPath(GridPose start, GridPose goal);
+    void reconstructPath(GridPose start);
 
   private:
     bool initialized_ = false;
@@ -46,6 +46,7 @@ namespace ino_planner {
     std::unordered_map<GridPose, GridPose> came_from_;
     std::unordered_map<GridPose, double> cost_so_far_;
     std::vector<GridPose> path_;
+    GridPose path_end_;
 
     ros::Publisher path_pub_;
 
