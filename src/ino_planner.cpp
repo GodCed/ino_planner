@@ -143,6 +143,7 @@ bool InoPlanner::makePlan(
         double tangent_rad = atan2(
               wy - step.pose.position.y,
               wx - step.pose.position.x);
+        tangent_rad = fmod(tangent_rad + 2.0 * M_PI, 2.0*M_PI);
         int tangent_deg = static_cast<int>(tangent_rad * 180.0 / M_PI);
         tangent_quat.setRPY(0.0, 0.0, tangent_rad);
 
@@ -155,6 +156,9 @@ bool InoPlanner::makePlan(
         double interval_deg = pose.theta_start() + static_cast<double>(pose.theta_length())/2.0;
         double interval_rad = interval_deg * M_PI / 180.0;
         interval_quat.setRPY(0.0, 0.0, interval_rad);
+
+        //ROS_INFO("int. %03d to %03d center at %03d. tang. is %03d rev. %03d", pose.theta_start(), pose.theta_length() + pose.theta_start(), static_cast<int>(interval_deg), tangent_deg, reverse_deg);
+        ROS_INFO("to tangent %5.2f\tto reverse %5.2f", fabs(last_quat.angleShortestPath(tangent_quat)), fabs(last_quat.angleShortestPath(reverse_quat)));
 
         if(fabs(last_quat.angleShortestPath(tangent_quat)) <= fabs(last_quat.angleShortestPath(reverse_quat)))
         {
@@ -171,7 +175,7 @@ bool InoPlanner::makePlan(
         {
           if (pose.theta_is_free(reverse_deg))
           {
-            tf2::convert(tangent_quat, step.pose.orientation);
+            tf2::convert(reverse_quat, step.pose.orientation);
           }
           else
           {
@@ -186,6 +190,7 @@ bool InoPlanner::makePlan(
       }
 
       plan.push_back(step);
+      tf2::convert(step.pose.orientation, last_quat);
     }
     plan.push_back(goal);
 
