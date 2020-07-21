@@ -59,6 +59,7 @@ namespace ino_planner
 
     bool canReachTo(GridPose pose) const;
     double costTo(GridPose pose);
+    double heuristic(GridPose pose);
 
     inline GridLocation offsetLocation(GridLocation offset)
     {

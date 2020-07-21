@@ -44,8 +44,11 @@ void InoPlanner::initialize(std::string, costmap_2d::Costmap2DROS* costmap_ros)
   costmap_ = costmap_ros->getCostmap();
   worldModel_ = std::make_unique<base_local_planner::CostmapModel>(*costmap_);
 
-  ros::NodeHandle nh;
+  visited_grid_.header.frame_id = costmap_ros->getGlobalFrameID();
+
+  ros::NodeHandle nh("~");
   path_pub_ = nh.advertise<nav_msgs::Path>("global_plan", 1, true);
+  grid_pub_ = nh.advertise<nav_msgs::OccupancyGrid>("visited_cells", 10, false);
 
   initialized_ = true;
   ROS_INFO("Initialized ino_planner.");
@@ -79,7 +82,6 @@ bool InoPlanner::makePlan(
   ROS_INFO("Starting yaw is %d", start_yaw);
 
   GridPose grid_start(GridLocation(static_cast<int>(mx), static_cast<int>(my)), start_yaw, 9, 0);
-  //GridPose grid_start(GridLocation(static_cast<int>(mx), static_cast<int>(my)), 0, 359, 0);
   grid_start.is_start_ = true;
 
   if (!costmap_->worldToMap(goal.pose.position.x, goal.pose.position.y, mx, my))
@@ -100,12 +102,17 @@ bool InoPlanner::makePlan(
   ROS_INFO("Goal yaw is %d", goal_yaw);
 
   GridPose grid_end(GridLocation(static_cast<int>(mx), static_cast<int>(my)), goal_yaw, 9, 0);
-  //GridPose grid_end(GridLocation(static_cast<int>(mx), static_cast<int>(my)), 0, 359, 0);
   grid_end.is_goal_ = true;
 
-  ROS_INFO("Building the graph...");
-  graph_.rebuild(costmap_, *worldModel_, footprint_);
-  ROS_INFO("Graph built. Planning path.");
+  if (!graphBuilt_)
+  {
+    ROS_INFO("Building the graph...");
+    graph_.rebuild(costmap_, *worldModel_, footprint_);
+
+    graphBuilt_ = true;
+  }
+
+  ROS_INFO("Planning path.");
   bool succeeded = dijkstra(grid_start, grid_end);
 
   if (succeeded)
@@ -157,9 +164,6 @@ bool InoPlanner::makePlan(
         double interval_rad = interval_deg * M_PI / 180.0;
         interval_quat.setRPY(0.0, 0.0, interval_rad);
 
-        //ROS_INFO("int. %03d to %03d center at %03d. tang. is %03d rev. %03d", pose.theta_start(), pose.theta_length() + pose.theta_start(), static_cast<int>(interval_deg), tangent_deg, reverse_deg);
-        ROS_INFO("to tangent %5.2f\tto reverse %5.2f", fabs(last_quat.angleShortestPath(tangent_quat)), fabs(last_quat.angleShortestPath(reverse_quat)));
-
         if(fabs(last_quat.angleShortestPath(tangent_quat)) <= fabs(last_quat.angleShortestPath(reverse_quat)))
         {
           if (pose.theta_is_free(tangent_deg))
@@ -201,7 +205,7 @@ bool InoPlanner::makePlan(
     // ===
     //
 
-    for(unsigned long i = plan.size()-2; i > 0; i--)
+    /*for(unsigned long i = plan.size()-2; i > 0; i--)
     {
       if (i > 59)
       {
@@ -211,7 +215,7 @@ bool InoPlanner::makePlan(
       {
         plan[i].pose.orientation = start.pose.orientation;
       }
-    }
+    }*/
 
     nav_msgs::Path path_msg;
     path_msg.header = start.header;
@@ -242,10 +246,21 @@ bool InoPlanner::dijkstra(GridPose start, GridPose goal)
   GridPose current;
   double new_cost;
 
+  visited_grid_.info.origin.position.x = costmap_->getOriginX();
+  visited_grid_.info.origin.position.y = costmap_->getOriginY();
+  visited_grid_.info.resolution = static_cast<float>(costmap_->getResolution());
+  visited_grid_.info.width = costmap_->getSizeInCellsX();
+  visited_grid_.info.height = costmap_->getSizeInCellsY();
+  visited_grid_.data = std::vector<int8_t>(visited_grid_.info.width * visited_grid_.info.height, 0);
+  grid_pub_.publish(visited_grid_);
+
   while (!frontier_.empty() && ros::ok())
   {
     current = frontier_.top().second;
     frontier_.pop();
+
+    visited_grid_.data[current.location().x() + current.location().y()*visited_grid_.info.width] = -1;
+    grid_pub_.publish(visited_grid_);
 
     if (current == goal)
     {
@@ -260,7 +275,7 @@ bool InoPlanner::dijkstra(GridPose start, GridPose goal)
       {
         cost_so_far_[next] = new_cost;
         came_from_[next] = current;
-        frontier_.emplace(new_cost, next);
+        frontier_.emplace(new_cost + next.heuristic(goal), next);
       }
     }
   }

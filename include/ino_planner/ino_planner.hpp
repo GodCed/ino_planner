@@ -37,6 +37,7 @@ namespace ino_planner {
 
   private:
     bool initialized_ = false;
+    bool graphBuilt_ = false;
 
     std::vector<geometry_msgs::Point> footprint_;
     costmap_2d::Costmap2D* costmap_ = nullptr;
@@ -49,6 +50,9 @@ namespace ino_planner {
     GridPose path_end_;
 
     ros::Publisher path_pub_;
+
+    ros::Publisher grid_pub_;
+    nav_msgs::OccupancyGrid visited_grid_;
 
     PQ frontier_;
   };

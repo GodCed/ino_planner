@@ -23,7 +23,7 @@ double GridLocation::costTo(GridLocation location)
     int dx = location.x_ - x_;
     int dy = location.y_ - y_;
 
-    return dx*dx + dy*dy;
+    return std::sqrt(dx*dx + dy*dy);
 }
 
 
@@ -60,8 +60,13 @@ bool GridPose::canReachTo(GridPose pose) const
 double GridPose::costTo(GridPose pose)
 {
     return location_.costTo(pose.location_)
-        + (35.9 / (double)thetaOverlapWith(pose))
-        + cost_;
+        //+ (35.9 / (double)thetaOverlapWith(pose))
+       + cost_;
+}
+
+double GridPose::heuristic(GridPose pose)
+{
+  return location_.costTo(pose.location_);
 }
 
 
