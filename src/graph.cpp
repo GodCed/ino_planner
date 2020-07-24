@@ -61,7 +61,7 @@ double GridPose::costTo(GridPose pose)
 {
     return location_.costTo(pose.location_)
         //+ (35.9 / (double)thetaOverlapWith(pose))
-       + cost_;
+       + static_cast<double>(cost_)/255.0;
 }
 
 double GridPose::heuristic(GridPose pose)
