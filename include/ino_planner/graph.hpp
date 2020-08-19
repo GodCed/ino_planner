@@ -23,14 +23,14 @@ namespace ino_planner
     int hash() const;
     double costTo(GridLocation location);
 
-    inline unsigned int x()
+    inline int x()
     {
-      return static_cast<unsigned int>(x_);
+      return x_;
     }
 
-    inline unsigned int y()
+    inline int y()
     {
-      return static_cast<unsigned int>(y_);
+      return y_;
     }
 
     friend inline GridLocation operator+(const GridLocation& a, const GridLocation& b)
@@ -59,7 +59,7 @@ namespace ino_planner
 
     bool canReachTo(GridPose pose) const;
     double costTo(GridPose pose);
-    double heuristic(GridPose pose);
+    double heuristic(GridPose pose, double d, double d2);
 
     inline GridLocation offsetLocation(GridLocation offset)
     {
@@ -147,8 +147,8 @@ namespace ino_planner
       GridLocation{-1, -1}, GridLocation{-1, 1}
     };
 
-    unsigned int size_x_;
-    unsigned int size_y_;
+    int size_x_;
+    int size_y_;
   };
 
 

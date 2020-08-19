@@ -254,6 +254,9 @@ bool InoPlanner::dijkstra(GridPose start, GridPose goal)
   visited_grid_.data = std::vector<int8_t>(visited_grid_.info.width * visited_grid_.info.height, 0);
   grid_pub_.publish(visited_grid_);
 
+  double d = 1.0;
+  double d2 = sqrt(2.0);
+
   while (!frontier_.empty() && ros::ok())
   {
     current = frontier_.top().second;
@@ -275,7 +278,7 @@ bool InoPlanner::dijkstra(GridPose start, GridPose goal)
       {
         cost_so_far_[next] = new_cost;
         came_from_[next] = current;
-        frontier_.emplace(new_cost + next.heuristic(goal), next);
+        frontier_.emplace(new_cost + next.heuristic(goal, d, d2), next);
       }
     }
   }
