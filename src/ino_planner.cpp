@@ -256,6 +256,7 @@ bool InoPlanner::dijkstra(GridPose start, GridPose goal)
 
   double d = 1.0;
   double d2 = sqrt(2.0);
+  double p = 0.5 / static_cast<double>(visited_grid_.info.width + visited_grid_.info.height);
 
   while (!frontier_.empty() && ros::ok())
   {
@@ -278,7 +279,7 @@ bool InoPlanner::dijkstra(GridPose start, GridPose goal)
       {
         cost_so_far_[next] = new_cost;
         came_from_[next] = current;
-        frontier_.emplace(new_cost + next.heuristic(goal, d, d2), next);
+        frontier_.emplace(new_cost + next.heuristic(goal, d, d2, p), next);
       }
     }
   }

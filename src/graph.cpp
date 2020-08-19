@@ -73,12 +73,13 @@ double GridPose::costTo(GridPose pose)
  *
  */
 
-double GridPose::heuristic(GridPose goal, double d, double d2)
+double GridPose::heuristic(GridPose goal, double d, double d2, double p)
 {
   double dx = abs(location_.x() - goal.location_.x());
   double dy = abs(location_.y() - goal.location_.y());
 
-  return d * (dx + dy) + (d2 - 2 * d) * std::min(dx, dy);
+  double h = d * (dx + dy) + (d2 - 2 * d) * std::min(dx, dy);
+  return h * (1.0 + p);
 }
 
 
