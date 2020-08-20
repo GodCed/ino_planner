@@ -15,6 +15,7 @@ find_package(catkin REQUIRED
   pluginlib
   roscpp
   nav_msgs
+  std_msgs
 )
 
 ## System dependencies are found with CMake's conventions

@@ -33,6 +33,13 @@ namespace ino_planner
       return y_;
     }
 
+    inline bool inGrid(int x_dim, int y_dim)
+    {
+        return x_ >= 0 && x_ < x_dim && y_ >= 0 && y_ < y_dim;
+    }
+
+    void deltasTo(GridLocation goal, double &dx, double &dy);
+
     friend inline GridLocation operator+(const GridLocation& a, const GridLocation& b)
     {
       return GridLocation(a.x_ + b.x_, a.y_ + b.y_);

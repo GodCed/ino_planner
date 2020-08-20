@@ -27,6 +27,13 @@ double GridLocation::costTo(GridLocation location)
 }
 
 
+void GridLocation::deltasTo(GridLocation goal, double &dx, double &dy)
+{
+    dx = abs(x_ - goal.x_);
+    dy = abs(y_ - goal.y_);
+}
+
+
 GridPose::GridPose() {}
 
 
@@ -61,7 +68,7 @@ double GridPose::costTo(GridPose pose)
 {
     return location_.costTo(pose.location_)
         //+ (35.9 / (double)thetaOverlapWith(pose))
-       + static_cast<double>(cost_)/255.0;
+       + static_cast<double>(cost_);
 }
 
 
@@ -75,8 +82,8 @@ double GridPose::costTo(GridPose pose)
 
 double GridPose::heuristic(GridPose goal, double d, double d2, double p)
 {
-  double dx = abs(location_.x() - goal.location_.x());
-  double dy = abs(location_.y() - goal.location_.y());
+  double dx, dy;
+  location_.deltasTo(goal.location_, dx, dy);
 
   double h = d * (dx + dy) + (d2 - 2 * d) * std::min(dx, dy);
   return h * (1.0 + p);
@@ -95,7 +102,7 @@ std::vector<GridPose> Graph::neighbors(GridPose pose)
     for(auto move: moves_)
     {
         GridLocation location = pose.offsetLocation(move);
-        if (location.x() > 0 && location.x() < size_x_ && location.y() > 0 && location.y() < size_y_)
+        if (location.inGrid(size_x_, size_y_))
         {
           auto potential_poses = free_grid_.equal_range(location);
           std::for_each(

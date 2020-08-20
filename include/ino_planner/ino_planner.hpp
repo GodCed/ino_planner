@@ -51,6 +51,8 @@ namespace ino_planner {
 
     ros::Publisher path_pub_;
 
+    ros::Publisher size_pub_;
+
     ros::Publisher grid_pub_;
     nav_msgs::OccupancyGrid visited_grid_;
 

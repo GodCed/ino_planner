@@ -5,6 +5,7 @@
 #include <tf/tf.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <nav_msgs/Path.h>
+#include <std_msgs/UInt64.h>
 
 
 PLUGINLIB_EXPORT_CLASS(ino_planner::InoPlanner, nav_core::BaseGlobalPlanner)
@@ -49,6 +50,7 @@ void InoPlanner::initialize(std::string, costmap_2d::Costmap2DROS* costmap_ros)
   ros::NodeHandle nh("~");
   path_pub_ = nh.advertise<nav_msgs::Path>("global_plan", 1, true);
   grid_pub_ = nh.advertise<nav_msgs::OccupancyGrid>("visited_cells", 10, false);
+  size_pub_ = nh.advertise<std_msgs::UInt64>("frontier_length", 1, false);
 
   initialized_ = true;
   ROS_INFO("Initialized ino_planner.");
@@ -258,17 +260,21 @@ bool InoPlanner::dijkstra(GridPose start, GridPose goal)
   double d2 = sqrt(2.0);
   double p = 0.5 / static_cast<double>(visited_grid_.info.width + visited_grid_.info.height);
 
+  std_msgs::UInt64 frontier_size_msg;
   while (!frontier_.empty() && ros::ok())
   {
     current = frontier_.top().second;
     frontier_.pop();
 
     visited_grid_.data[current.location().x() + current.location().y()*visited_grid_.info.width] = -1;
-    grid_pub_.publish(visited_grid_);
+    frontier_size_msg.data = frontier_.size();
+    size_pub_.publish(frontier_size_msg);
+
 
     if (current == goal)
     {
       path_end_ = current;
+      grid_pub_.publish(visited_grid_);
       return true;
     }
 
@@ -284,6 +290,7 @@ bool InoPlanner::dijkstra(GridPose start, GridPose goal)
     }
   }
 
+  grid_pub_.publish(visited_grid_);
   return false;
 }
 
