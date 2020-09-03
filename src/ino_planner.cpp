@@ -106,14 +106,6 @@ bool InoPlanner::makePlan(
   GridPose grid_end(GridLocation(static_cast<int>(mx), static_cast<int>(my)), goal_yaw, 9, 0);
   grid_end.is_goal_ = true;
 
-  if (!graphBuilt_)
-  {
-    ROS_INFO("Building the graph...");
-    graph_.rebuild(costmap_, *worldModel_, footprint_);
-
-    graphBuilt_ = true;
-  }
-
   ROS_INFO("Planning path.");
   bool succeeded = dijkstra(grid_start, grid_end);
 
@@ -200,25 +192,6 @@ bool InoPlanner::makePlan(
     }
     plan.push_back(goal);
 
-
-    //
-    // ===
-    // We need to offset the yaw for 60 samples!
-    // ===
-    //
-
-    /*for(unsigned long i = plan.size()-2; i > 0; i--)
-    {
-      if (i > 59)
-      {
-        plan[i].pose.orientation = plan[i-60].pose.orientation;
-      }
-      else
-      {
-        plan[i].pose.orientation = start.pose.orientation;
-      }
-    }*/
-
     nav_msgs::Path path_msg;
     path_msg.header = start.header;
     path_msg.poses = plan;
@@ -248,17 +221,17 @@ bool InoPlanner::dijkstra(GridPose start, GridPose goal)
   GridPose current;
   double new_cost;
 
-  visited_grid_.info.origin.position.x = costmap_->getOriginX();
+  /*visited_grid_.info.origin.position.x = costmap_->getOriginX();
   visited_grid_.info.origin.position.y = costmap_->getOriginY();
   visited_grid_.info.resolution = static_cast<float>(costmap_->getResolution());
   visited_grid_.info.width = costmap_->getSizeInCellsX();
   visited_grid_.info.height = costmap_->getSizeInCellsY();
   visited_grid_.data = std::vector<int8_t>(visited_grid_.info.width * visited_grid_.info.height, 0);
-  grid_pub_.publish(visited_grid_);
+  grid_pub_.publish(visited_grid_);*/
 
   double d = 1.0;
   double d2 = sqrt(2.0);
-  double p = 0.5 / static_cast<double>(visited_grid_.info.width + visited_grid_.info.height);
+  double p = 0.5 / static_cast<double>(costmap_->getSizeInCellsX() + costmap_->getSizeInCellsY());
 
   std_msgs::UInt64 frontier_size_msg;
   while (!frontier_.empty() && ros::ok())
@@ -266,7 +239,7 @@ bool InoPlanner::dijkstra(GridPose start, GridPose goal)
     current = frontier_.top().second;
     frontier_.pop();
 
-    visited_grid_.data[current.location().x() + current.location().y()*visited_grid_.info.width] = -1;
+    //visited_grid_.data[current.location().x() + current.location().y()*visited_grid_.info.width] = -1;
     frontier_size_msg.data = frontier_.size();
     size_pub_.publish(frontier_size_msg);
 
@@ -274,11 +247,15 @@ bool InoPlanner::dijkstra(GridPose start, GridPose goal)
     if (current == goal)
     {
       path_end_ = current;
-      grid_pub_.publish(visited_grid_);
+      //grid_pub_.publish(visited_grid_);
       return true;
     }
 
-    for (GridPose next : graph_.neighbors(current))
+    for (GridPose next : graph_.neighbors(
+             costmap_,
+             *worldModel_,
+             footprint_,
+             current))
     {
       new_cost = cost_so_far_[current] + current.costTo(next);
       if (cost_so_far_.find(next) == cost_so_far_.end() || new_cost < cost_so_far_[next])
@@ -290,7 +267,7 @@ bool InoPlanner::dijkstra(GridPose start, GridPose goal)
     }
   }
 
-  grid_pub_.publish(visited_grid_);
+  //grid_pub_.publish(visited_grid_);
   return false;
 }
 

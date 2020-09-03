@@ -21,7 +21,11 @@ namespace ino_planner
     GridLocation(int x, int y);
     
     int hash() const;
+
+    unsigned char cost(const costmap_2d::Costmap2D *costmap) const;
     double costTo(GridLocation location);
+
+    void mapToWorld(const costmap_2d::Costmap2D *costmap, double &x, double &y) const;
 
     inline int x()
     {
@@ -141,7 +145,12 @@ namespace ino_planner
   class Graph
   {
   public:
-    std::vector<GridPose> neighbors(GridPose pose);
+    std::vector<GridPose> neighbors(
+          const costmap_2d::Costmap2D *costmap,
+          base_local_planner::WorldModel &world_model,
+          const std::vector<geometry_msgs::Point> &footprint,
+          GridPose pose);
+
     void rebuild(costmap_2d::Costmap2D *costmap, base_local_planner::WorldModel &world_model, std::vector<geometry_msgs::Point> &footprint);
 
   private:
@@ -153,6 +162,13 @@ namespace ino_planner
       GridLocation{1, 1}, GridLocation{1, -1},
       GridLocation{-1, -1}, GridLocation{-1, 1}
     };
+
+    void posesForLocation(
+            const costmap_2d::Costmap2D *costmap,
+            base_local_planner::WorldModel &world_model,
+            const std::vector<geometry_msgs::Point> &footprint,
+            const GridLocation loc,
+            std::vector<GridPose> &poses) const;
 
     int size_x_;
     int size_y_;
