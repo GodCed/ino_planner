@@ -6,6 +6,8 @@
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <nav_msgs/Path.h>
 #include <std_msgs/UInt64.h>
+#include <chrono>
+#include <sstream>
 
 
 PLUGINLIB_EXPORT_CLASS(ino_planner::InoPlanner, nav_core::BaseGlobalPlanner)
@@ -107,7 +109,7 @@ bool InoPlanner::makePlan(
   grid_end.is_goal_ = true;
 
   ROS_INFO("Planning path.");
-  bool succeeded = dijkstra(grid_start, grid_end);
+  bool succeeded = aStar(grid_start, grid_end);
 
   if (succeeded)
   {
@@ -207,7 +209,7 @@ bool InoPlanner::makePlan(
 }
 
 
-bool InoPlanner::dijkstra(GridPose start, GridPose goal)
+bool InoPlanner::aStar(GridPose start, GridPose goal)
 {
   came_from_.clear();
   cost_so_far_.clear();
@@ -234,10 +236,18 @@ bool InoPlanner::dijkstra(GridPose start, GridPose goal)
   double p = 0.5 / static_cast<double>(costmap_->getSizeInCellsX() + costmap_->getSizeInCellsY());
 
   std_msgs::UInt64 frontier_size_msg;
+
+  std::chrono::milliseconds queue_time;
+  std::chrono::milliseconds graph_time;
+
+
   while (!frontier_.empty() && ros::ok())
   {
+    auto start = std::chrono::high_resolution_clock::now();
     current = frontier_.top().second;
     frontier_.pop();
+    auto stop = std::chrono::high_resolution_clock::now();
+    queue_time += std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
 
     //visited_grid_.data[current.location().x() + current.location().y()*visited_grid_.info.width] = -1;
     frontier_size_msg.data = frontier_.size();
@@ -248,21 +258,39 @@ bool InoPlanner::dijkstra(GridPose start, GridPose goal)
     {
       path_end_ = current;
       //grid_pub_.publish(visited_grid_);
+
+      std::stringstream chrono_stats;
+      chrono_stats << std::endl;
+      chrono_stats << "======================================================" << std::endl;
+      chrono_stats << "Planing time profile" << std::endl;
+      chrono_stats << "------------------------------------------------------" << std::endl;
+      chrono_stats << "Queue time (ms): " << queue_time.count() << std::endl;
+      chrono_stats << "Graph time (ms): " << graph_time.count() << std::endl;
+      chrono_stats << "======================================================" << std::endl;
+
+      ROS_INFO("%s", chrono_stats.str().c_str());
+
       return true;
     }
 
-    for (GridPose next : graph_.neighbors(
-             costmap_,
-             *worldModel_,
-             footprint_,
-             current))
+    start = std::chrono::high_resolution_clock::now();
+    auto neighbors = graph_.neighbors(costmap_, *worldModel_, footprint_, current);
+    stop = std::chrono::high_resolution_clock::now();
+    graph_time += std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
+
+    for (GridPose next : neighbors)
     {
       new_cost = cost_so_far_[current] + current.costTo(next);
       if (cost_so_far_.find(next) == cost_so_far_.end() || new_cost < cost_so_far_[next])
       {
         cost_so_far_[next] = new_cost;
         came_from_[next] = current;
-        frontier_.emplace(new_cost + next.heuristic(goal, d, d2, p), next);
+        double new_cost_heu = new_cost + next.heuristic(goal, d, d2, p);
+
+        start = std::chrono::high_resolution_clock::now();
+        frontier_.emplace(new_cost_heu, next);
+        stop = std::chrono::high_resolution_clock::now();
+        queue_time += std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
       }
     }
   }

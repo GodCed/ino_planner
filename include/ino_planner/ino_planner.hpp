@@ -32,7 +32,7 @@ namespace ino_planner {
         const geometry_msgs::PoseStamped& goal,
         std::vector<geometry_msgs::PoseStamped>& plan);
 
-    bool dijkstra(GridPose start, GridPose goal);
+    bool aStar(GridPose start, GridPose goal);
     void reconstructPath(GridPose start);
 
   private:
