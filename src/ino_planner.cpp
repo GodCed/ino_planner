@@ -237,8 +237,10 @@ bool InoPlanner::aStar(GridPose start, GridPose goal)
 
   std_msgs::UInt64 frontier_size_msg;
 
-  std::chrono::milliseconds queue_time;
-  std::chrono::milliseconds graph_time;
+  std::chrono::microseconds queue_time(0);
+  std::chrono::microseconds graph_time(0);
+  std::chrono::microseconds cost_time(0);
+  auto planning_start = std::chrono::high_resolution_clock::now();
 
 
   while (!frontier_.empty() && ros::ok())
@@ -247,11 +249,11 @@ bool InoPlanner::aStar(GridPose start, GridPose goal)
     current = frontier_.top().second;
     frontier_.pop();
     auto stop = std::chrono::high_resolution_clock::now();
-    queue_time += std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
+    queue_time += std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
 
     //visited_grid_.data[current.location().x() + current.location().y()*visited_grid_.info.width] = -1;
-    frontier_size_msg.data = frontier_.size();
-    size_pub_.publish(frontier_size_msg);
+    //frontier_size_msg.data = frontier_.size();
+    //size_pub_.publish(frontier_size_msg);
 
 
     if (current == goal)
@@ -259,13 +261,19 @@ bool InoPlanner::aStar(GridPose start, GridPose goal)
       path_end_ = current;
       //grid_pub_.publish(visited_grid_);
 
+      auto planning_end = std::chrono::high_resolution_clock::now();
+      auto planning_time = std::chrono::duration_cast<std::chrono::microseconds>(planning_end - planning_start);
+      auto other_time = planning_time - queue_time - graph_time - cost_time;
+
       std::stringstream chrono_stats;
       chrono_stats << std::endl;
       chrono_stats << "======================================================" << std::endl;
       chrono_stats << "Planing time profile" << std::endl;
       chrono_stats << "------------------------------------------------------" << std::endl;
-      chrono_stats << "Queue time (ms): " << queue_time.count() << std::endl;
-      chrono_stats << "Graph time (ms): " << graph_time.count() << std::endl;
+      chrono_stats << "Queue time (us): " << queue_time.count() << std::endl;
+      chrono_stats << "Graph time (us): " << graph_time.count() << std::endl;
+      chrono_stats << "Cost  time (us): " << cost_time.count()  << std::endl;
+      chrono_stats << "Other time (us): " << other_time.count() << std::endl;
       chrono_stats << "======================================================" << std::endl;
 
       ROS_INFO("%s", chrono_stats.str().c_str());
@@ -276,21 +284,30 @@ bool InoPlanner::aStar(GridPose start, GridPose goal)
     start = std::chrono::high_resolution_clock::now();
     auto neighbors = graph_.neighbors(costmap_, *worldModel_, footprint_, current);
     stop = std::chrono::high_resolution_clock::now();
-    graph_time += std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
+    graph_time += std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
 
     for (GridPose next : neighbors)
     {
-      new_cost = cost_so_far_[current] + current.costTo(next);
+      start = std::chrono::high_resolution_clock::now();
+      double costTo = current.costTo(next);
+      stop = std::chrono::high_resolution_clock::now();
+      cost_time += std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+
+      new_cost = cost_so_far_[current] + costTo;
       if (cost_so_far_.find(next) == cost_so_far_.end() || new_cost < cost_so_far_[next])
       {
         cost_so_far_[next] = new_cost;
         came_from_[next] = current;
+
+        start = std::chrono::high_resolution_clock::now();
         double new_cost_heu = new_cost + next.heuristic(goal, d, d2, p);
+        stop = std::chrono::high_resolution_clock::now();
+        cost_time += std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
 
         start = std::chrono::high_resolution_clock::now();
         frontier_.emplace(new_cost_heu, next);
         stop = std::chrono::high_resolution_clock::now();
-        queue_time += std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
+        queue_time += std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
       }
     }
   }
