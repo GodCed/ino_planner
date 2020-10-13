@@ -278,6 +278,8 @@ bool InoPlanner::aStar(GridPose start, GridPose goal)
 
       ROS_INFO("%s", chrono_stats.str().c_str());
 
+      graph_.reportProfiling();
+
       return true;
     }
 

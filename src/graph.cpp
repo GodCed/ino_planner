@@ -4,6 +4,8 @@
 
 
 using namespace ino_planner;
+using namespace std;
+using namespace chrono;
 
 
 GridLocation::GridLocation() {}
@@ -128,7 +130,13 @@ std::vector<GridPose> Graph::neighbors(
           posesForLocation(costmap, world_model, footprint, location, potentials);
 
           for (GridPose potential: potentials) {
-              if (pose.canReachTo(potential)) {
+
+              auto begin = steady_clock::now();
+              bool canReach = pose.canReachTo(potential);
+              auto end = steady_clock::now();
+              canReach_micros = duration_cast<microseconds>(end - begin);
+
+              if ( canReach ) {
                   neighbors.push_back(potential);
               }
           }
@@ -145,9 +153,12 @@ void Graph::posesForLocation(
         base_local_planner::WorldModel &world_model,
         const std::vector<geometry_msgs::Point> &footprint,
         const GridLocation loc,
-        std::vector<GridPose> &poses) const
+        std::vector<GridPose> &poses)
 {
+    auto begin = steady_clock::now();
     unsigned char cost = loc.cost(costmap);
+    auto end = steady_clock::now();
+    cost_micros += duration_cast<microseconds>(end - begin);
 
     if (cost == 0) // Definitly not in a collision
     {
@@ -161,12 +172,20 @@ void Graph::posesForLocation(
       bool was_safe = false;
 
       double wx, wy;
+
+      auto begin = steady_clock::now();
       loc.mapToWorld(costmap, wx, wy);
+      auto end = steady_clock::now();
+      mapToWorld_micros += duration_cast<microseconds>(end - begin);
 
       for (int theta = 0; theta < 359; theta+=10) // We check orientations...
       {
         double theta_rad = static_cast<double>(theta) * M_PI / 180.0;
+
+        auto begin = steady_clock::now();
         bool colliding = world_model.footprintCost(wx, wy, theta_rad, footprint) < 0;
+        auto end = steady_clock::now();
+        footprintCost_micros += duration_cast<microseconds>(end - begin);
 
         if (!colliding && !was_safe) // Begining of safe zone
         {
