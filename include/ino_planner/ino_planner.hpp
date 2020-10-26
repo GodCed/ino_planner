@@ -40,8 +40,10 @@ namespace ino_planner {
     bool graphBuilt_ = false;
 
     std::vector<geometry_msgs::Point> footprint_;
+    double inscribed_radius_, circumscribed_radius_;
+
     costmap_2d::Costmap2D* costmap_ = nullptr;
-    std::unique_ptr<base_local_planner::CostmapModel> worldModel_;
+    std::unique_ptr<base_local_planner::WorldModel> worldModel_;
 
     Graph graph_;
     std::unordered_map<GridPose, GridPose> came_from_;

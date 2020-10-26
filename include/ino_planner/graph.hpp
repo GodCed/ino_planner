@@ -10,6 +10,11 @@
 #include <base_local_planner/world_model.h>
 
 
+namespace costmap_2d {
+    static const unsigned char POSSIBLY_CIRCUMSCRIBED_INFLATED_OBSTACLE = 128;
+}
+
+
 namespace ino_planner
 {
 
@@ -149,6 +154,8 @@ namespace ino_planner
           const costmap_2d::Costmap2D *costmap,
           base_local_planner::WorldModel &world_model,
           const std::vector<geometry_msgs::Point> &footprint,
+          const double inscribed_radius,
+          const double circumscribed_radius,
           GridPose pose);
 
     void rebuild(costmap_2d::Costmap2D *costmap, base_local_planner::WorldModel &world_model, std::vector<geometry_msgs::Point> &footprint);
@@ -187,6 +194,8 @@ namespace ino_planner
             const costmap_2d::Costmap2D *costmap,
             base_local_planner::WorldModel &world_model,
             const std::vector<geometry_msgs::Point> &footprint,
+            const double inscribed_radius,
+            const double circumscribed_radius,
             const GridLocation loc,
             std::vector<GridPose> &poses);
 

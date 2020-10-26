@@ -1,4 +1,5 @@
 #include <ino_planner/ino_planner.hpp>
+#include <ino_planner/simple_costmap_model.hpp>
 #include <pluginlib/class_list_macros.hpp>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/convert.h>
@@ -35,6 +36,8 @@ InoPlanner::InoPlanner()
   point.x = -1.57;
   point.y = -1.02;
   footprint_.push_back(point);
+
+  costmap_2d::calculateMinAndMaxDistances(footprint_, inscribed_radius_, circumscribed_radius_);
 }
 
 
@@ -45,7 +48,7 @@ void InoPlanner::initialize(std::string, costmap_2d::Costmap2DROS* costmap_ros)
     ROS_WARN("This planner is already initialized.");
   }
   costmap_ = costmap_ros->getCostmap();
-  worldModel_ = std::make_unique<base_local_planner::CostmapModel>(*costmap_);
+  worldModel_ = std::make_unique<SimpleCostmapModel>(*costmap_);
 
   visited_grid_.header.frame_id = costmap_ros->getGlobalFrameID();
 
@@ -284,7 +287,7 @@ bool InoPlanner::aStar(GridPose start, GridPose goal)
     }
 
     start = std::chrono::high_resolution_clock::now();
-    auto neighbors = graph_.neighbors(costmap_, *worldModel_, footprint_, current);
+    auto neighbors = graph_.neighbors(costmap_, *worldModel_, footprint_, inscribed_radius_, circumscribed_radius_, current);
     stop = std::chrono::high_resolution_clock::now();
     graph_time += std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
 

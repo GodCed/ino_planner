@@ -139,6 +139,7 @@ include_directories(
 ## Declare a C++ library
 add_library(ino_planner
   src/graph.cpp
+  src/simple_costmap_model.cpp
   src/ino_planner.cpp
 )
 

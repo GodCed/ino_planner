@@ -1,4 +1,5 @@
 #include <ino_planner/graph.hpp>
+#include <costmap_2d/cost_values.h>
 #include <cmath>
 #include <algorithm>
 
@@ -114,6 +115,8 @@ std::vector<GridPose> Graph::neighbors(
         const costmap_2d::Costmap2D *costmap,
         base_local_planner::WorldModel &world_model,
         const std::vector<geometry_msgs::Point> &footprint,
+        const double inscribed_radius,
+        const double circumscribed_radius,
         GridPose pose)
 {
     size_x_ = costmap->getSizeInCellsX();
@@ -127,7 +130,7 @@ std::vector<GridPose> Graph::neighbors(
         if (location.inGrid(size_x_, size_y_))
         {
           std::vector<GridPose> potentials;
-          posesForLocation(costmap, world_model, footprint, location, potentials);
+          posesForLocation(costmap, world_model, footprint, inscribed_radius, circumscribed_radius, location, potentials);
 
           for (GridPose potential: potentials) {
 
@@ -152,6 +155,8 @@ void Graph::posesForLocation(
         const costmap_2d::Costmap2D *costmap,
         base_local_planner::WorldModel &world_model,
         const std::vector<geometry_msgs::Point> &footprint,
+        const double inscribed_radius,
+        const double circumscribed_radius,
         const GridLocation loc,
         std::vector<GridPose> &poses)
 {
@@ -160,13 +165,13 @@ void Graph::posesForLocation(
     auto end = steady_clock::now();
     cost_micros += duration_cast<microseconds>(end - begin);
 
-    if (cost == 0) // Definitly not in a collision
+    if (cost < costmap_2d::POSSIBLY_CIRCUMSCRIBED_INFLATED_OBSTACLE) // Definitly not in a collision
     {
       GridPose pose(loc, 0, 359, cost);
       poses.push_back(pose);
     }
 
-    else if (cost < 253) // Maybe in a collision
+    else if (cost < costmap_2d::INSCRIBED_INFLATED_OBSTACLE) // Maybe in a collision
     {
       int safe_begin = 0;
       bool was_safe = false;
@@ -178,12 +183,12 @@ void Graph::posesForLocation(
       auto end = steady_clock::now();
       mapToWorld_micros += duration_cast<microseconds>(end - begin);
 
-      for (int theta = 0; theta < 359; theta+=10) // We check orientations...
+      for (int theta = 0; theta < 359; theta+=36) // We check orientations...
       {
         double theta_rad = static_cast<double>(theta) * M_PI / 180.0;
 
         auto begin = steady_clock::now();
-        bool colliding = world_model.footprintCost(wx, wy, theta_rad, footprint) < 0;
+        bool colliding = world_model.footprintCost(wx, wy, theta_rad, footprint, inscribed_radius, circumscribed_radius) < 0;
         auto end = steady_clock::now();
         footprintCost_micros += duration_cast<microseconds>(end - begin);
 
