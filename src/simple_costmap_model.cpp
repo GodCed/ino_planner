@@ -18,7 +18,7 @@ double SimpleCostmapModel::footprintCost(
     {
         return -1;
     }
-    else if (center_cost == 0)
+    else if (center_cost <= 127)
     {
         return center_cost;
     }
@@ -31,7 +31,7 @@ double SimpleCostmapModel::footprintCost(
             costmap_.worldToMap(corner.x, corner.y, corner_mx, corner_my);
             corner_costs.push_back(costmap_.getCost(corner_mx, corner_my));
         }
-        return *(std::max_element(corner_costs.begin(), corner_costs.end())) >= costmap_2d::LETHAL_OBSTACLE ? -1 : center_cost;
+        return *(std::max_element(corner_costs.begin(), corner_costs.end())) >= costmap_2d::INSCRIBED_INFLATED_OBSTACLE ? -1 : center_cost;
     }
 
     return -1;

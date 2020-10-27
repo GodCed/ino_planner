@@ -19,25 +19,33 @@ using namespace ino_planner;
 
 InoPlanner::InoPlanner()
 {
+  std::vector<geometry_msgs::Point> full_footprint;
   geometry_msgs::Point point;
 
   point.x = 1.57;
   point.y = -1.02;
-  footprint_.push_back(point);
+  full_footprint.push_back(point);
 
   point.x = 1.57;
   point.y = 1.02;
-  footprint_.push_back(point);
+  full_footprint.push_back(point);
 
   point.x = -1.57;
   point.y = 1.02;
-  footprint_.push_back(point);
+  full_footprint.push_back(point);
 
   point.x = -1.57;
   point.y = -1.02;
+  full_footprint.push_back(point);
+
+  costmap_2d::calculateMinAndMaxDistances(full_footprint, inscribed_radius_, circumscribed_radius_);
+
+  point.x = 1.57 - inscribed_radius_;
+  point.y = 0;
   footprint_.push_back(point);
 
-  costmap_2d::calculateMinAndMaxDistances(footprint_, inscribed_radius_, circumscribed_radius_);
+  point.x = -1.57 + inscribed_radius_;
+  footprint_.push_back(point);
 }
 
 

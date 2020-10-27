@@ -165,7 +165,7 @@ void Graph::posesForLocation(
     auto end = steady_clock::now();
     cost_micros += duration_cast<microseconds>(end - begin);
 
-    if (cost < costmap_2d::POSSIBLY_CIRCUMSCRIBED_INFLATED_OBSTACLE) // Definitly not in a collision
+    if (cost == costmap_2d::FREE_SPACE) // Definitly not in a collision
     {
       GridPose pose(loc, 0, 359, cost);
       poses.push_back(pose);
