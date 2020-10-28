@@ -6,7 +6,6 @@
 
 using namespace ino_planner;
 using namespace std;
-using namespace chrono;
 
 
 GridLocation::GridLocation() {}
@@ -82,18 +81,9 @@ bool GridPose::canReachTo(GridPose pose) const
 double GridPose::costTo(GridPose pose)
 {
     return location_.costTo(pose.location_)
-        //+ (35.9 / (double)thetaOverlapWith(pose))
        + static_cast<double>(cost_) / 255.0;
 }
 
-
-/*
- * function heuristic(node) =
-    dx = abs(node.x - goal.x)
-    dy = abs(node.y - goal.y)
-    return D * (dx + dy) + (D2 - 2 * D) * min(dx, dy)
- *
- */
 
 double GridPose::heuristic(GridPose goal, double d, double d2, double p)
 {
@@ -134,12 +124,7 @@ std::vector<GridPose> Graph::neighbors(
 
           for (GridPose potential: potentials) {
 
-              auto begin = steady_clock::now();
-              bool canReach = pose.canReachTo(potential);
-              auto end = steady_clock::now();
-              canReach_micros = duration_cast<microseconds>(end - begin);
-
-              if ( canReach ) {
+              if ( pose.canReachTo(potential) ) {
                   neighbors.push_back(potential);
               }
           }
@@ -160,10 +145,7 @@ void Graph::posesForLocation(
         const GridLocation loc,
         std::vector<GridPose> &poses)
 {
-    auto begin = steady_clock::now();
     unsigned char cost = loc.cost(costmap);
-    auto end = steady_clock::now();
-    cost_micros += duration_cast<microseconds>(end - begin);
 
     if (cost == costmap_2d::FREE_SPACE) // Definitly not in a collision
     {
@@ -177,20 +159,12 @@ void Graph::posesForLocation(
       bool was_safe = false;
 
       double wx, wy;
-
-      auto begin = steady_clock::now();
       loc.mapToWorld(costmap, wx, wy);
-      auto end = steady_clock::now();
-      mapToWorld_micros += duration_cast<microseconds>(end - begin);
 
       for (int theta = 0; theta < 359; theta+=36) // We check orientations...
       {
         double theta_rad = static_cast<double>(theta) * M_PI / 180.0;
-
-        auto begin = steady_clock::now();
         bool colliding = world_model.footprintCost(wx, wy, theta_rad, footprint, inscribed_radius, circumscribed_radius) < 0;
-        auto end = steady_clock::now();
-        footprintCost_micros += duration_cast<microseconds>(end - begin);
 
         if (!colliding && !was_safe) // Begining of safe zone
         {

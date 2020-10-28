@@ -7,83 +7,87 @@
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <nav_msgs/Path.h>
 #include <std_msgs/UInt64.h>
-#include <chrono>
-#include <sstream>
 
 
 PLUGINLIB_EXPORT_CLASS(ino_planner::InoPlanner, nav_core::BaseGlobalPlanner)
-
-
 using namespace ino_planner;
 
 
-InoPlanner::InoPlanner()
-{
-  std::vector<geometry_msgs::Point> full_footprint;
-  geometry_msgs::Point point;
-
-  point.x = 1.57;
-  point.y = -1.02;
-  full_footprint.push_back(point);
-
-  point.x = 1.57;
-  point.y = 1.02;
-  full_footprint.push_back(point);
-
-  point.x = -1.57;
-  point.y = 1.02;
-  full_footprint.push_back(point);
-
-  point.x = -1.57;
-  point.y = -1.02;
-  full_footprint.push_back(point);
-
-  costmap_2d::calculateMinAndMaxDistances(full_footprint, inscribed_radius_, circumscribed_radius_);
-
-  point.x = 1.57 - inscribed_radius_;
-  point.y = 0;
-  footprint_.push_back(point);
-
-  point.x = -1.57 + inscribed_radius_;
-  footprint_.push_back(point);
-}
-
-
+/**
+ * @brief Prepare this planner for planning
+ * @param The costmap to use for planning
+ */
 void InoPlanner::initialize(std::string, costmap_2d::Costmap2DROS* costmap_ros)
 {
+  // Check if the planner was previously initialized
   if (initialized_)
   {
     ROS_WARN("This planner is already initialized.");
   }
-  costmap_ = costmap_ros->getCostmap();
-  worldModel_ = std::make_unique<SimpleCostmapModel>(*costmap_);
 
-  visited_grid_.header.frame_id = costmap_ros->getGlobalFrameID();
-
-  ros::NodeHandle nh("~");
+  // Create publisher for published produced path for information purpose
+  ros::NodeHandle nh("ino_planner");
   path_pub_ = nh.advertise<nav_msgs::Path>("global_plan", 1, true);
-  grid_pub_ = nh.advertise<nav_msgs::OccupancyGrid>("visited_cells", 10, false);
-  size_pub_ = nh.advertise<std_msgs::UInt64>("frontier_length", 1, false);
+
+  // Gather costmap and create world model
+  costmap_ros_ = costmap_ros;
+  costmap_ = costmap_ros->getCostmap();
+  world_model_ = std::make_unique<SimpleCostmapModel>(*costmap_);
 
   initialized_ = true;
   ROS_INFO("Initialized ino_planner.");
 }
 
 
+/**
+ * @brief Update the simplified footprint from the costmap's footprint
+ *
+ * This function assumes a rectangular footprint with the longer side alongs the x axis.
+ * The footprint must be symetrical along the x axis (-y = y).
+ */
+void InoPlanner::updateFootprint()
+{
+    geometry_msgs::Point point;
+    simplified_footprint_.clear();
+
+    // Find inscribed radius from footprint points
+    costmap_2d::calculateMinAndMaxDistances(costmap_ros_->getRobotFootprint(), inscribed_radius_, circumscribed_radius_);
+
+    // Simplified points are at (+-inscribed_radius, 0)
+    point.x = circumscribed_radius_ - inscribed_radius_;
+    point.y = 0;
+    simplified_footprint_.push_back(point);
+
+    point.x = -point.x;
+    simplified_footprint_.push_back(point);
+}
+
+
+/**
+ * @brief Create a plan from start to goal using the A* algorithm
+ * @param start Start pose of the robot in world coordinates
+ * @param goal Goal pose of the robot in world coordinates
+ * @param plan The plan computed by the planner
+ * @return true is the planning succeeded
+ */
 bool InoPlanner::makePlan(
   const geometry_msgs::PoseStamped& start,
   const geometry_msgs::PoseStamped& goal,
   std::vector<geometry_msgs::PoseStamped>& plan)
 {
   ROS_INFO("Got goal.");
+  updateFootprint();
+
   unsigned int mx, my;
 
+  // Check if starting pose is inside the map
   if (!costmap_->worldToMap(start.pose.position.x, start.pose.position.y, mx, my))
   {
     ROS_WARN("The starting pose is outside of the map. Planning will always fail.");
     return false;
-  }
+  }  
 
+  // Extract yaw from start pose then create matching graph location
   tf::Quaternion q(
     start.pose.orientation.x,
     start.pose.orientation.y,
@@ -99,12 +103,14 @@ bool InoPlanner::makePlan(
   GridPose grid_start(GridLocation(static_cast<int>(mx), static_cast<int>(my)), start_yaw, 9, 0);
   grid_start.is_start_ = true;
 
+  // Check if goal pose is inside the map
   if (!costmap_->worldToMap(goal.pose.position.x, goal.pose.position.y, mx, my))
   {
     ROS_WARN("The goal pose is outside of the map. Planning will always fail.");
     return false;
   }
 
+  // Extract yaw from goal pose then create matching graph location
   q = tf::Quaternion(
     goal.pose.orientation.x,
     goal.pose.orientation.y,
@@ -119,40 +125,44 @@ bool InoPlanner::makePlan(
   GridPose grid_end(GridLocation(static_cast<int>(mx), static_cast<int>(my)), goal_yaw, 9, 0);
   grid_end.is_goal_ = true;
 
+  // Call A* to do the actual planning
   ROS_INFO("Planning path.");
   bool succeeded = aStar(grid_start, grid_end);
 
+  // A* found a path, we can continue
   if (succeeded)
   {
     ROS_INFO("Found path.");
     reconstructPath(grid_start);
-
     plan.push_back(start);
 
-    geometry_msgs::PoseStamped step;
+    geometry_msgs::PoseStamped step; // Step is in world coordinates
     step.header = start.header;
 
-    tf2::Quaternion last_quat;
+    tf2::Quaternion last_quat; // Orientation of the last step in world coordinates
     tf2::convert(start.pose.orientation, last_quat);
 
+    // We traverse the path to convert map coordinates path to world coordinates plan
     for (unsigned long i = 0; i < path_.size(); i++)
     {
+      // Convert map coordinates to world coordinates
       GridPose pose = path_[i];
-      ROS_INFO_THROTTLE(1,"Adding yaw to %04lu/%04lu", i, path_.size());
-
       costmap_->mapToWorld(
             pose.location().x(), pose.location().y(),
             step.pose.position.x, step.pose.position.y);
 
+      // We are far enough from the end of the path to look ahead
       if ( i+20 < path_.size())
       {
-        GridPose ahead = path_[i+20];
+        GridPose ahead = path_[i+20];   // Pose ahead is hardcoded at 20 index farther for now
         double wx, wy;
 
+        // Get ahead coordinates in world coordinates
         costmap_->mapToWorld(
               ahead.location().x(), ahead.location().y(),
               wx, wy);
 
+        // Compute orientation tangent to the current motion moving forward
         tf2::Quaternion tangent_quat;
         double tangent_rad = atan2(
               wy - step.pose.position.y,
@@ -161,56 +171,59 @@ bool InoPlanner::makePlan(
         int tangent_deg = static_cast<int>(tangent_rad * 180.0 / M_PI);
         tangent_quat.setRPY(0.0, 0.0, tangent_rad);
 
+        // Compute orientation tangent to the current motion in reverse
         tf2::Quaternion reverse_quat;
         int reverse_deg = (tangent_deg + 180) % 360;
         double reverse_rad = fmod(tangent_rad + M_PI, 2.0*M_PI);
         reverse_quat.setRPY(0.0, 0.0, reverse_rad);
 
+        // Compute orientation in the middle of the pose free orientation interval
         tf2::Quaternion interval_quat;
         double interval_deg = pose.theta_start() + static_cast<double>(pose.theta_length())/2.0;
         double interval_rad = interval_deg * M_PI / 180.0;
         interval_quat.setRPY(0.0, 0.0, interval_rad);
 
+        // Last orientation is closer to forward motion tangent (we are probably moving forward)
         if(fabs(last_quat.angleShortestPath(tangent_quat)) <= fabs(last_quat.angleShortestPath(reverse_quat)))
         {
-          if (pose.theta_is_free(tangent_deg))
-          {
+          // The formward tangent orientation is allowed by the pose free interval
+          if (pose.theta_is_free(tangent_deg)) {
             tf2::convert(tangent_quat, step.pose.orientation);
-          }
-          else
-          {
+          } else { // We fall back to the center of the free interval to maximise clearance
             tf2::convert(interval_quat, step.pose.orientation);
           }
         }
-        else
+        else // Last orientation is closer to reverse motion tangent (we are probably reversing)
         {
-          if (pose.theta_is_free(reverse_deg))
-          {
+          // The reverse tangent orientation is allowed by the pose free interval
+          if (pose.theta_is_free(reverse_deg)) {
             tf2::convert(reverse_quat, step.pose.orientation);
-          }
-          else
-          {
+          } else {  // We fall back to the center of the free interval to maximise clearance
             tf2::convert(interval_quat, step.pose.orientation);
           }
         }
       }
-
-      else
+      else // We can't look ahead so we adopt the goal orientation
       {
         step.pose.orientation = goal.pose.orientation;
       }
 
+      // Add the step to the plan then convert from tf2 quaternion to geometry_msgs quaternion
       plan.push_back(step);
       tf2::convert(step.pose.orientation, last_quat);
     }
+
+    // Append the goal at the end of the plan
     plan.push_back(goal);
 
+    // Publish the complete plan
     nav_msgs::Path path_msg;
     path_msg.header = start.header;
     path_msg.poses = plan;
     path_pub_.publish(path_msg);
   }
 
+  // No path found, nothing to do
   else
   {
     ROS_WARN("No path to goal found.");
@@ -220,133 +233,107 @@ bool InoPlanner::makePlan(
 }
 
 
+/**
+ * @brief A* algorithm implementation
+ *
+ * The actual implementation of the A* algorithm
+ * The logic is mostly from here: https://www.redblobgames.com/pathfinding/a-star/implementation.html#cplusplus
+ *
+ * @param start Start pose of the robot in map coordinates
+ * @param goal Goal pose of the robot in map coordinates
+ * @return true if a path has been found
+ */
 bool InoPlanner::aStar(GridPose start, GridPose goal)
 {
+  // Clears queues and frontier for new run
   came_from_.clear();
   cost_so_far_.clear();
   frontier_ = PQ();
 
+  // Start A* with a single node
   frontier_.emplace(0, start);
-
   came_from_[start] = start;
   cost_so_far_[start] = 0.0;
 
   GridPose current;
   double new_cost;
 
-  /*visited_grid_.info.origin.position.x = costmap_->getOriginX();
-  visited_grid_.info.origin.position.y = costmap_->getOriginY();
-  visited_grid_.info.resolution = static_cast<float>(costmap_->getResolution());
-  visited_grid_.info.width = costmap_->getSizeInCellsX();
-  visited_grid_.info.height = costmap_->getSizeInCellsY();
-  visited_grid_.data = std::vector<int8_t>(visited_grid_.info.width * visited_grid_.info.height, 0);
-  grid_pub_.publish(visited_grid_);*/
-
+  // Setup coefficients for octile distance see reference
+  // http://theory.stanford.edu/~amitp/GameProgramming/Heuristics.html#diagonal-distance
   double d = 1.0;
   double d2 = sqrt(2.0);
+
+  // Setup tie breaker for heuristic function see reference
+  // http://theory.stanford.edu/~amitp/GameProgramming/Heuristics.html#breaking-ties
   double p = 0.5 / static_cast<double>(costmap_->getSizeInCellsX() + costmap_->getSizeInCellsY());
 
-  std_msgs::UInt64 frontier_size_msg;
-
-  std::chrono::microseconds queue_time(0);
-  std::chrono::microseconds graph_time(0);
-  std::chrono::microseconds cost_time(0);
-  auto planning_start = std::chrono::high_resolution_clock::now();
-
-
+  // There is still nodes to expand and ROS didn't request shutdown
   while (!frontier_.empty() && ros::ok())
   {
-    auto start = std::chrono::high_resolution_clock::now();
+    // Get the highest priority node from the queue
     current = frontier_.top().second;
     frontier_.pop();
-    auto stop = std::chrono::high_resolution_clock::now();
-    queue_time += std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
 
-    //visited_grid_.data[current.location().x() + current.location().y()*visited_grid_.info.width] = -1;
-    //frontier_size_msg.data = frontier_.size();
-    //size_pub_.publish(frontier_size_msg);
-
-
+    // We reached the goal! Our work is here is done
     if (current == goal)
     {
       path_end_ = current;
-      //grid_pub_.publish(visited_grid_);
-
-      auto planning_end = std::chrono::high_resolution_clock::now();
-      auto planning_time = std::chrono::duration_cast<std::chrono::microseconds>(planning_end - planning_start);
-      auto other_time = planning_time - queue_time - graph_time - cost_time;
-
-      std::stringstream chrono_stats;
-      chrono_stats << std::endl;
-      chrono_stats << "======================================================" << std::endl;
-      chrono_stats << "Planing time profile" << std::endl;
-      chrono_stats << "------------------------------------------------------" << std::endl;
-      chrono_stats << "Queue time (us): " << queue_time.count() << std::endl;
-      chrono_stats << "Graph time (us): " << graph_time.count() << std::endl;
-      chrono_stats << "Cost  time (us): " << cost_time.count()  << std::endl;
-      chrono_stats << "Other time (us): " << other_time.count() << std::endl;
-      chrono_stats << "======================================================" << std::endl;
-
-      ROS_INFO("%s", chrono_stats.str().c_str());
-
-      graph_.reportProfiling();
-
       return true;
     }
 
-    start = std::chrono::high_resolution_clock::now();
-    auto neighbors = graph_.neighbors(costmap_, *worldModel_, footprint_, inscribed_radius_, circumscribed_radius_, current);
-    stop = std::chrono::high_resolution_clock::now();
-    graph_time += std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+    // Retreive neighborings pose from the graph. Thoses poses are all reachable from the current pose.
+    auto neighbors = graph_.neighbors(costmap_, *world_model_, simplified_footprint_, inscribed_radius_, circumscribed_radius_, current);
 
+    // Each neighbor could be the next node
     for (GridPose next : neighbors)
     {
-      start = std::chrono::high_resolution_clock::now();
-      double costTo = current.costTo(next);
-      stop = std::chrono::high_resolution_clock::now();
-      cost_time += std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+      // Cost to reach the neighbor is current cost + the cost to travel to the neighbor
+      new_cost = cost_so_far_[current] + current.costTo(next);
 
-      new_cost = cost_so_far_[current] + costTo;
+      // The neighbor was never visited or a cheaper way to reach it is found
       if (cost_so_far_.find(next) == cost_so_far_.end() || new_cost < cost_so_far_[next])
       {
+        // We update the cost to reach the neighbor and add it to the priority queue
         cost_so_far_[next] = new_cost;
         came_from_[next] = current;
-
-        start = std::chrono::high_resolution_clock::now();
-        double new_cost_heu = new_cost + next.heuristic(goal, d, d2, p);
-        stop = std::chrono::high_resolution_clock::now();
-        cost_time += std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
-
-        start = std::chrono::high_resolution_clock::now();
-        frontier_.emplace(new_cost_heu, next);
-        stop = std::chrono::high_resolution_clock::now();
-        queue_time += std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+        frontier_.emplace(new_cost + next.heuristic(goal, d, d2, p), next);
       }
     }
   }
 
-  //grid_pub_.publish(visited_grid_);
+  // We didn't break from the search loop, so no plan exists or we were interrupted
   return false;
 }
 
 
+/**
+ * @brief Traverse back the graph to reconstruct the path found by A*
+ * @param Start pose of the robot in map coordinates passed to the A* algorithm
+ */
 void InoPlanner::reconstructPath(GridPose start)
 {
+  ROS_INFO("reconstructing...");
+
+  // Clear the path from previous run
   path_.clear();
 
+  // Starting from the end of the path, which match the goal
+  // We use path_end_ rather than the goal because we need the exact pose object for the unordered_map lookups to work!
   GridPose current = path_end_;
 
-  ROS_INFO("reconstructing...");
+  // While we didn't reached the start and ROS is not quitting
   while (current != start && ros::ok())
   {
+    // Skip adding path_end_ to the path because the goal will be appended while adding yaw in make_plan method
     if (current != path_end_)
     {
       path_.push_back(current);
     }
+    // We lookup what pose led to the current pose and continue from there
     current = came_from_[current];
   }
 
-  ROS_INFO("path complete.");
+  // We reverse the path to have the end at the end of the vector as expected
   std::reverse(path_.begin(), path_.end());
+  ROS_INFO("path complete.");
 }
-

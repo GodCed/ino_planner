@@ -158,30 +158,7 @@ namespace ino_planner
           const double circumscribed_radius,
           GridPose pose);
 
-    void rebuild(costmap_2d::Costmap2D *costmap, base_local_planner::WorldModel &world_model, std::vector<geometry_msgs::Point> &footprint);
-
-    void reportProfiling() {
-        std::stringstream chrono_stats;
-        chrono_stats << std::endl;
-        chrono_stats << "======================================================" << std::endl;
-        chrono_stats << "Graph time profile" << std::endl;
-        chrono_stats << "------------------------------------------------------" << std::endl;
-        chrono_stats << "     canReach time (us): " << canReach_micros.count() << std::endl;
-        chrono_stats << "   mapToWorld time (us): " << mapToWorld_micros.count() << std::endl;
-        chrono_stats << "footprintCost time (us): " << footprintCost_micros.count()  << std::endl;
-        chrono_stats << "         cost time (us): " << cost_micros.count()  << std::endl;
-        chrono_stats << "======================================================" << std::endl;
-
-        ROS_INFO("%s", chrono_stats.str().c_str());
-
-        canReach_micros = std::chrono::microseconds(0);
-        mapToWorld_micros = std::chrono::microseconds(0);
-        footprintCost_micros = std::chrono::microseconds(0);
-        cost_micros = std::chrono::microseconds(0);
-    }
-
   private:
-    std::unordered_multimap<GridLocation, GridPose> free_grid_;
 
     std::array<GridLocation, 8> moves_ = {
       GridLocation{1, 0}, GridLocation{0, 1},
@@ -201,11 +178,6 @@ namespace ino_planner
 
     int size_x_;
     int size_y_;
-
-    std::chrono::microseconds canReach_micros {0};
-    std::chrono::microseconds mapToWorld_micros {0};
-    std::chrono::microseconds footprintCost_micros {0};
-    std::chrono::microseconds cost_micros {0};
   };
 
 
