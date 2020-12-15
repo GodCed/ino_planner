@@ -81,7 +81,8 @@ bool GridPose::canReachTo(GridPose pose) const
 double GridPose::costTo(GridPose pose)
 {
     return location_.costTo(pose.location_)
-       + static_cast<double>(cost_) / 255.0;
+       + static_cast<double>(cost_) / 255.0
+       + (1.0 - thetaOverlapWith(pose) / 360.0);
 }
 
 
