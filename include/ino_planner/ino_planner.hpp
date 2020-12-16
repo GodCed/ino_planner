@@ -8,6 +8,9 @@
 #include <queue>
 #include <vector>
 
+#include <dynamic_reconfigure/server.h>
+#include <ino_planner/InoPlannerConfig.h>
+
 
 namespace ino_planner {
 
@@ -58,6 +61,8 @@ namespace ino_planner {
     // ROS stuff
     bool initialized_ = false;
     ros::Publisher path_pub_;
+    std::unique_ptr<dynamic_reconfigure::Server<InoPlannerConfig>> dsrv_;
+    ino_planner::InoPlannerConfig config_;
 
     // Footprint
     std::vector<geometry_msgs::Point> simplified_footprint_;
@@ -80,6 +85,7 @@ namespace ino_planner {
     void updateFootprint();
     bool aStar(GridPose start, GridPose goal);
     void reconstructPath(GridPose start);
+    void reconfigureCallback(InoPlannerConfig &config, uint32_t level);
   };
 
 

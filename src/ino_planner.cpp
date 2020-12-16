@@ -11,6 +11,8 @@
 
 PLUGINLIB_EXPORT_CLASS(ino_planner::InoPlanner, nav_core::BaseGlobalPlanner)
 using namespace ino_planner;
+using namespace dynamic_reconfigure;
+using namespace std;
 
 
 /**
@@ -23,6 +25,7 @@ void InoPlanner::initialize(std::string, costmap_2d::Costmap2DROS* costmap_ros)
   if (initialized_)
   {
     ROS_WARN("This planner is already initialized.");
+    return;
   }
 
   // Create publisher for published produced path for information purpose
@@ -34,8 +37,25 @@ void InoPlanner::initialize(std::string, costmap_2d::Costmap2DROS* costmap_ros)
   costmap_ = costmap_ros->getCostmap();
   world_model_ = std::make_unique<SimpleCostmapModel>(*costmap_);
 
+  // Setup dynamic reconfigure
+  dsrv_ = make_unique<Server<InoPlannerConfig>>(nh);
+  Server<InoPlannerConfig>::CallbackType callback = boost::bind(&InoPlanner::reconfigureCallback, this, _1, _2);
+  dsrv_->setCallback(callback);
+
   initialized_ = true;
   ROS_INFO("Initialized ino_planner.");
+}
+
+
+/**
+ * @brief Applies the received configuration to this planner
+ *
+ * @param config The new configuration
+ * @param level Indicate which parameter changed
+ */
+void InoPlanner::reconfigureCallback(InoPlannerConfig &config, uint32_t level)
+{
+  config_ = config;
 }
 
 
@@ -85,7 +105,7 @@ bool InoPlanner::makePlan(
   {
     ROS_WARN("The starting pose is outside of the map. Planning will always fail.");
     return false;
-  }  
+  }
 
   // Extract yaw from start pose then create matching graph location
   tf::Quaternion q(
@@ -141,6 +161,15 @@ bool InoPlanner::makePlan(
 
     tf2::Quaternion last_quat; // Orientation of the last step in world coordinates
     tf2::convert(start.pose.orientation, last_quat);
+
+    tf2::Quaternion goal_quat;
+    tf2::convert(goal.pose.orientation, goal_quat);
+
+    tf2::Quaternion reversing_quat;
+    reversing_quat.setRPY(0.0, 0.0, M_PI);
+
+    tf2::Quaternion reversed_goal_quat;
+    reversed_goal_quat = goal_quat * reversing_quat;
 
     // We traverse the path to convert map coordinates path to world coordinates plan
     for (unsigned long i = 0; i < path_.size(); i++)
@@ -205,16 +234,19 @@ bool InoPlanner::makePlan(
       }
       else // We can't look ahead so we adopt the goal orientation
       {
-        step.pose.orientation = goal.pose.orientation;
+        bool reverse_is_closer = fabs(last_quat.angleShortestPath(reversed_goal_quat)) <= fabs(last_quat.angleShortestPath(goal_quat));
+        if(reverse_is_closer && config_.simetrical_goal) {
+          tf2::convert(reversed_goal_quat, step.pose.orientation);
+        }
+        else {
+          tf2::convert(goal_quat, step.pose.orientation);
+        }
       }
 
       // Add the step to the plan then convert from tf2 quaternion to geometry_msgs quaternion
       plan.push_back(step);
       tf2::convert(step.pose.orientation, last_quat);
     }
-
-    // Append the goal at the end of the plan
-    plan.push_back(goal);
 
     // Publish the complete plan
     nav_msgs::Path path_msg;
@@ -324,12 +356,7 @@ void InoPlanner::reconstructPath(GridPose start)
   // While we didn't reached the start and ROS is not quitting
   while (current != start && ros::ok())
   {
-    // Skip adding path_end_ to the path because the goal will be appended while adding yaw in make_plan method
-    if (current != path_end_)
-    {
-      path_.push_back(current);
-    }
-    // We lookup what pose led to the current pose and continue from there
+    path_.push_back(current);
     current = came_from_[current];
   }
 
