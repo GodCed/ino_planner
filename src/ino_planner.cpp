@@ -8,18 +8,16 @@
 #include <nav_msgs/Path.h>
 #include <std_msgs/UInt64.h>
 
-
 PLUGINLIB_EXPORT_CLASS(ino_planner::InoPlanner, nav_core::BaseGlobalPlanner)
 using namespace ino_planner;
 using namespace dynamic_reconfigure;
 using namespace std;
 
-
 /**
  * @brief Prepare this planner for planning
  * @param The costmap to use for planning
  */
-void InoPlanner::initialize(std::string, costmap_2d::Costmap2DROS* costmap_ros)
+void InoPlanner::initialize(std::string, costmap_2d::Costmap2DROS *costmap_ros)
 {
   // Check if the planner was previously initialized
   if (initialized_)
@@ -46,7 +44,6 @@ void InoPlanner::initialize(std::string, costmap_2d::Costmap2DROS* costmap_ros)
   ROS_INFO("Initialized ino_planner.");
 }
 
-
 /**
  * @brief Applies the received configuration to this planner
  *
@@ -58,7 +55,6 @@ void InoPlanner::reconfigureCallback(InoPlannerConfig &config, uint32_t level)
   config_ = config;
 }
 
-
 /**
  * @brief Update the simplified footprint from the costmap's footprint
  *
@@ -67,21 +63,23 @@ void InoPlanner::reconfigureCallback(InoPlannerConfig &config, uint32_t level)
  */
 void InoPlanner::updateFootprint()
 {
-    geometry_msgs::Point point;
-    simplified_footprint_.clear();
+  geometry_msgs::Point point;
+  simplified_footprint_.clear();
 
-    // Find inscribed radius from footprint points
-    costmap_2d::calculateMinAndMaxDistances(costmap_ros_->getRobotFootprint(), inscribed_radius_, circumscribed_radius_);
+  // Find inscribed radius from footprint points
+  double min_distance, max_distance;
+  costmap_2d::calculateMinAndMaxDistances(costmap_ros_->getRobotFootprint(), min_distance, max_distance);
+  inscribed_radius_ = min_distance / 2.0;
+  circumscribed_radius_ = max_distance / 2.0;
 
-    // Simplified points are at (+-inscribed_radius, 0)
-    point.x = circumscribed_radius_ - inscribed_radius_;
-    point.y = 0;
-    simplified_footprint_.push_back(point);
+  // Simplified points are at (+-inscribed_radius, 0)
+  point.x = circumscribed_radius_ - inscribed_radius_;
+  point.y = 0;
+  simplified_footprint_.push_back(point);
 
-    point.x = -point.x;
-    simplified_footprint_.push_back(point);
+  point.x = -point.x;
+  simplified_footprint_.push_back(point);
 }
-
 
 /**
  * @brief Create a plan from start to goal using the A* algorithm
@@ -91,9 +89,9 @@ void InoPlanner::updateFootprint()
  * @return true is the planning succeeded
  */
 bool InoPlanner::makePlan(
-  const geometry_msgs::PoseStamped& start,
-  const geometry_msgs::PoseStamped& goal,
-  std::vector<geometry_msgs::PoseStamped>& plan)
+    const geometry_msgs::PoseStamped &start,
+    const geometry_msgs::PoseStamped &goal,
+    std::vector<geometry_msgs::PoseStamped> &plan)
 {
   ROS_INFO("Got goal.");
   updateFootprint();
@@ -109,10 +107,10 @@ bool InoPlanner::makePlan(
 
   // Extract yaw from start pose then create matching graph location
   tf::Quaternion q(
-    start.pose.orientation.x,
-    start.pose.orientation.y,
-    start.pose.orientation.z,
-    start.pose.orientation.w);
+      start.pose.orientation.x,
+      start.pose.orientation.y,
+      start.pose.orientation.z,
+      start.pose.orientation.w);
   tf::Matrix3x3 m(q);
   double roll, pitch, yaw;
   m.getRPY(roll, pitch, yaw);
@@ -132,10 +130,10 @@ bool InoPlanner::makePlan(
 
   // Extract yaw from goal pose then create matching graph location
   q = tf::Quaternion(
-    goal.pose.orientation.x,
-    goal.pose.orientation.y,
-    goal.pose.orientation.z,
-    goal.pose.orientation.w);
+      goal.pose.orientation.x,
+      goal.pose.orientation.y,
+      goal.pose.orientation.z,
+      goal.pose.orientation.w);
   m = tf::Matrix3x3(q);
   m.getRPY(roll, pitch, yaw);
   int goal_yaw = (static_cast<int>(yaw * 180.0 / M_PI) + 360) % 360;
@@ -177,57 +175,63 @@ bool InoPlanner::makePlan(
       // Convert map coordinates to world coordinates
       GridPose pose = path_[i];
       costmap_->mapToWorld(
-            pose.location().x(), pose.location().y(),
-            step.pose.position.x, step.pose.position.y);
+          pose.location().x(), pose.location().y(),
+          step.pose.position.x, step.pose.position.y);
 
       // We are far enough from the end of the path to look ahead
-      if ( i+20 < path_.size())
+      if (i + 20 < path_.size())
       {
-        GridPose ahead = path_[i+20];   // Pose ahead is hardcoded at 20 index farther for now
+        GridPose ahead = path_[i + 20]; // Pose ahead is hardcoded at 20 index farther for now
         double wx, wy;
 
         // Get ahead coordinates in world coordinates
         costmap_->mapToWorld(
-              ahead.location().x(), ahead.location().y(),
-              wx, wy);
+            ahead.location().x(), ahead.location().y(),
+            wx, wy);
 
         // Compute orientation tangent to the current motion moving forward
         tf2::Quaternion tangent_quat;
         double tangent_rad = atan2(
-              wy - step.pose.position.y,
-              wx - step.pose.position.x);
-        tangent_rad = fmod(tangent_rad + 2.0 * M_PI, 2.0*M_PI);
+            wy - step.pose.position.y,
+            wx - step.pose.position.x);
+        tangent_rad = fmod(tangent_rad + 2.0 * M_PI, 2.0 * M_PI);
         int tangent_deg = static_cast<int>(tangent_rad * 180.0 / M_PI);
         tangent_quat.setRPY(0.0, 0.0, tangent_rad);
 
         // Compute orientation tangent to the current motion in reverse
         tf2::Quaternion reverse_quat;
         int reverse_deg = (tangent_deg + 180) % 360;
-        double reverse_rad = fmod(tangent_rad + M_PI, 2.0*M_PI);
+        double reverse_rad = fmod(tangent_rad + M_PI, 2.0 * M_PI);
         reverse_quat.setRPY(0.0, 0.0, reverse_rad);
 
         // Compute orientation in the middle of the pose free orientation interval
         tf2::Quaternion interval_quat;
-        double interval_deg = pose.theta_start() + static_cast<double>(pose.theta_length())/2.0;
+        double interval_deg = pose.theta_start() + static_cast<double>(pose.theta_length()) / 2.0;
         double interval_rad = interval_deg * M_PI / 180.0;
         interval_quat.setRPY(0.0, 0.0, interval_rad);
 
         // Last orientation is closer to forward motion tangent (we are probably moving forward)
-        if(fabs(last_quat.angleShortestPath(tangent_quat)) <= fabs(last_quat.angleShortestPath(reverse_quat)))
+        if (fabs(last_quat.angleShortestPath(tangent_quat)) <= fabs(last_quat.angleShortestPath(reverse_quat)))
         {
           // The formward tangent orientation is allowed by the pose free interval
-          if (pose.theta_is_free(tangent_deg)) {
+          if (pose.theta_is_free(tangent_deg))
+          {
             tf2::convert(tangent_quat, step.pose.orientation);
-          } else { // We fall back to the center of the free interval to maximise clearance
+          }
+          else
+          { // We fall back to the center of the free interval to maximise clearance
             tf2::convert(interval_quat, step.pose.orientation);
           }
         }
         else // Last orientation is closer to reverse motion tangent (we are probably reversing)
         {
           // The reverse tangent orientation is allowed by the pose free interval
-          if (pose.theta_is_free(reverse_deg)) {
+          if (pose.theta_is_free(reverse_deg))
+          {
             tf2::convert(reverse_quat, step.pose.orientation);
-          } else {  // We fall back to the center of the free interval to maximise clearance
+          }
+          else
+          { // We fall back to the center of the free interval to maximise clearance
             tf2::convert(interval_quat, step.pose.orientation);
           }
         }
@@ -235,10 +239,12 @@ bool InoPlanner::makePlan(
       else // We can't look ahead so we adopt the goal orientation
       {
         bool reverse_is_closer = fabs(last_quat.angleShortestPath(reversed_goal_quat)) <= fabs(last_quat.angleShortestPath(goal_quat));
-        if(reverse_is_closer && config_.simetrical_goal) {
+        if (reverse_is_closer && config_.simetrical_goal)
+        {
           tf2::convert(reversed_goal_quat, step.pose.orientation);
         }
-        else {
+        else
+        {
           tf2::convert(goal_quat, step.pose.orientation);
         }
       }
@@ -263,7 +269,6 @@ bool InoPlanner::makePlan(
 
   return succeeded;
 }
-
 
 /**
  * @brief A* algorithm implementation
@@ -336,7 +341,6 @@ bool InoPlanner::aStar(GridPose start, GridPose goal)
   // We didn't break from the search loop, so no plan exists or we were interrupted
   return false;
 }
-
 
 /**
  * @brief Traverse back the graph to reconstruct the path found by A*

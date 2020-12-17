@@ -1,7 +1,6 @@
 #ifndef ino_planner_GRAPH_HPP
 #define ino_planner_GRAPH_HPP
 
-
 #include <functional>
 #include <vector>
 #include <array>
@@ -9,22 +8,20 @@
 #include <costmap_2d/costmap_2d.h>
 #include <base_local_planner/world_model.h>
 
-
-namespace costmap_2d {
-    static const unsigned char POSSIBLY_CIRCUMSCRIBED_INFLATED_OBSTACLE = 128;
+namespace costmap_2d
+{
+  static const unsigned char POSSIBLY_CIRCUMSCRIBED_INFLATED_OBSTACLE = 128;
 }
-
 
 namespace ino_planner
 {
-
 
   class GridLocation
   {
   public:
     GridLocation();
     GridLocation(int x, int y);
-    
+
     int hash() const;
 
     unsigned char cost(const costmap_2d::Costmap2D *costmap) const;
@@ -44,17 +41,17 @@ namespace ino_planner
 
     inline bool inGrid(int x_dim, int y_dim)
     {
-        return x_ >= 0 && x_ < x_dim && y_ >= 0 && y_ < y_dim;
+      return x_ >= 0 && x_ < x_dim && y_ >= 0 && y_ < y_dim;
     }
 
     void deltasTo(GridLocation goal, double &dx, double &dy);
 
-    friend inline GridLocation operator+(const GridLocation& a, const GridLocation& b)
+    friend inline GridLocation operator+(const GridLocation &a, const GridLocation &b)
     {
       return GridLocation(a.x_ + b.x_, a.y_ + b.y_);
     }
 
-    friend inline bool operator==(const GridLocation& a, const GridLocation& b)
+    friend inline bool operator==(const GridLocation &a, const GridLocation &b)
     {
       return a.x_ == b.x_ && a.y_ == b.y_;
     }
@@ -63,7 +60,6 @@ namespace ino_planner
     int x_ = 0;
     int y_ = 0;
   };
-
 
   class GridPose
   {
@@ -95,12 +91,12 @@ namespace ino_planner
       return (free_theta_start_ <= theta) && (theta <= (free_theta_start_ + free_theta_length_));
     }
 
-    friend inline bool operator==(const GridPose& a, const GridPose& b)
+    friend inline bool operator==(const GridPose &a, const GridPose &b)
     {
       return a.location_ == b.location_ && a.canReachTo(b);
     }
 
-    friend inline bool operator!=(const GridPose& a, const GridPose& b)
+    friend inline bool operator!=(const GridPose &a, const GridPose &b)
     {
       return !(a == b);
     }
@@ -116,72 +112,64 @@ namespace ino_planner
     int thetaOverlapWith(GridPose pose) const;
   };
 
-  
-}
-
+} // namespace ino_planner
 
 namespace std
 {
 
-
-  template <> struct hash<ino_planner::GridLocation>
+  template <>
+  struct hash<ino_planner::GridLocation>
   {
-    inline std::size_t operator()(const ino_planner::GridLocation& id) const noexcept
+    inline std::size_t operator()(const ino_planner::GridLocation &id) const noexcept
     {
       return std::hash<int>()(id.hash());
     }
   };
-  
 
-  template <> struct hash<ino_planner::GridPose>
+  template <>
+  struct hash<ino_planner::GridPose>
   {
-    inline std::size_t operator()(const ino_planner::GridPose& id) const noexcept
+    inline std::size_t operator()(const ino_planner::GridPose &id) const noexcept
     {
       return std::hash<int>()(id.hash());
     }
   };
-}
-
+} // namespace std
 
 namespace ino_planner
 {
-
 
   class Graph
   {
   public:
     std::vector<GridPose> neighbors(
-          const costmap_2d::Costmap2D *costmap,
-          base_local_planner::WorldModel &world_model,
-          const std::vector<geometry_msgs::Point> &footprint,
-          const double inscribed_radius,
-          const double circumscribed_radius,
-          GridPose pose);
+        const costmap_2d::Costmap2D *costmap,
+        base_local_planner::WorldModel &world_model,
+        const std::vector<geometry_msgs::Point> &footprint,
+        const double inscribed_radius,
+        const double circumscribed_radius,
+        GridPose pose);
 
   private:
-
     std::array<GridLocation, 8> moves_ = {
-      GridLocation{1, 0}, GridLocation{0, 1},
-      GridLocation{-1, 0}, GridLocation{0, -1},
-      GridLocation{1, 1}, GridLocation{1, -1},
-      GridLocation{-1, -1}, GridLocation{-1, 1}
-    };
+        GridLocation{1, 0}, GridLocation{0, 1},
+        GridLocation{-1, 0}, GridLocation{0, -1},
+        GridLocation{1, 1}, GridLocation{1, -1},
+        GridLocation{-1, -1}, GridLocation{-1, 1}};
 
     void posesForLocation(
-            const costmap_2d::Costmap2D *costmap,
-            base_local_planner::WorldModel &world_model,
-            const std::vector<geometry_msgs::Point> &footprint,
-            const double inscribed_radius,
-            const double circumscribed_radius,
-            const GridLocation loc,
-            std::vector<GridPose> &poses);
+        const costmap_2d::Costmap2D *costmap,
+        base_local_planner::WorldModel &world_model,
+        const std::vector<geometry_msgs::Point> &footprint,
+        const double inscribed_radius,
+        const double circumscribed_radius,
+        const GridLocation loc,
+        std::vector<GridPose> &poses);
 
     int size_x_;
     int size_y_;
   };
 
-
-}
-
+} // namespace ino_planner
 
 #endif // ino_planner_GRAPH_HPP
