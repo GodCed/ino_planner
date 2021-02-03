@@ -67,18 +67,31 @@ void InoPlanner::updateFootprint()
   simplified_footprint_.clear();
 
   // Find inscribed radius from footprint points
-  double min_distance, max_distance;
-  costmap_2d::calculateMinAndMaxDistances(costmap_ros_->getRobotFootprint(), min_distance, max_distance);
-  inscribed_radius_ = min_distance / 2.0;
-  circumscribed_radius_ = max_distance / 2.0;
+  double inscribed_radius_, circumscribed_radius_;
+  costmap_2d::calculateMinAndMaxDistances(costmap_ros_->getRobotFootprint(), inscribed_radius_, circumscribed_radius_);
 
-  // Simplified points are at (+-inscribed_radius, 0)
+  // Simplified points are at (+-(circumscribed - inscribed_radius), 0)
   point.x = circumscribed_radius_ - inscribed_radius_;
   point.y = 0;
   simplified_footprint_.push_back(point);
 
   point.x = -point.x;
   simplified_footprint_.push_back(point);
+
+  ROS_INFO("ino_planner received updated footprint");
+  for (auto &point : costmap_ros_->getRobotFootprint())
+  {
+    ROS_INFO("x: %.2f\ty: %.2f", point.x, point.y);
+  }
+
+  ROS_INFO("inscribed radius %.2f", inscribed_radius_);
+  ROS_INFO("circumscribed radius %.2f", circumscribed_radius_);
+
+  ROS_INFO("simplified footprint");
+  for (auto &point : simplified_footprint_)
+  {
+    ROS_INFO("x: %.2f\ty: %.2f", point.x, point.y);
+  }
 }
 
 /**
